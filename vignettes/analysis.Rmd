@@ -1,0 +1,59 @@
+---
+title: "Anthromes"
+author: "Nick Gauthier"
+date: "6/30/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(stars)
+library(dplyr)
+library(ggplot2)
+```
+
+```{r}
+years <- c(seq(-10000, 0, 1000),
+           seq(100, 1700, 100),
+           seq(1710, 2000, 10),
+           seq(2001, 2015, 1))
+```
+
+```{r}
+anthromes <- here::here('vignettes/data/raw_data/anthromes_all.tif') %>%
+  read_stars() %>%
+  setNames('anthrome') %>%
+  st_set_dimensions(which = 'band', values = years, name = 'year') %>%
+  filter(between(year, -10000, 0))# %>% 
+  
+anthromes_polys <- anthromes %>%
+st_as_sf(as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE) %>%
+  st_make_valid()
+```
+
+```{r}
+plot(anthromes_polys)
+ggplot() +
+  geom_stars(data = slice(anthromes, 'year', 1:4), downsample = 5) +
+  facet_wrap(~year) +
+  scale_fill_viridis_d(na.value = 'transparent') +
+  coord_equal() +
+  theme_void()
+```
+
+```{r}
+ggplot(anthromes) +
+  geom_sf()
+```
+
+```{r}
+test <- st_apply(anthromes, c('x', 'y', 'year'), function(x) st_as_sf(x, as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE))
+
+plot(anthromes[,,,1:6])
+```
+
+```{r}
+purrr::map(1:10, ~st_as_sf(anthromes[,,,.], as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE)) %>%
+  rbind -> test
+```
+
