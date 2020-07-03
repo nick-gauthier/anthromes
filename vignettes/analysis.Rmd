@@ -17,15 +17,101 @@ years <- c(seq(-10000, 0, 1000),
            seq(100, 1700, 100),
            seq(1710, 2000, 10),
            seq(2001, 2015, 1))
+bbox <- st_bbox(c(xmin = -125, xmax = -70, ymin = 25, ymax = 47),
+                crs = st_crs(4326))
+```
+
+
+```{r}
+anthrome_key <- tibble(
+  value = c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
+            52, 53, 54, 61, 62, 63, 70),
+  class = factor(c('Urban', 'Mixed settlements', 'Rice villages', 'Irrigated villages', 
+            'Rainfed villages', 'Pastoral villages', 'Residential irrigated croplands',
+            'Residential rainfed croplands', 'Populated croplands', 'Remote croplands', 
+            'Residential rangelands', 'Populated rangelands', 'Remote rangelands', 
+            'Residential woodlands', 'Populated woodlands', 'Remote woodlands', 
+            'Inhabited treeless & barren lands', 'Wild woodlands', 
+            'Wild treeless and barren lands', 'Ice, uninhabited', 'NODATA'), 
+            levels = c('Urban', 'Mixed settlements', 'Rice villages', 'Irrigated villages', 
+            'Rainfed villages', 'Pastoral villages', 'Residential irrigated croplands',
+            'Residential rainfed croplands', 'Populated croplands', 'Remote croplands', 
+            'Residential rangelands', 'Populated rangelands', 'Remote rangelands', 
+            'Residential woodlands', 'Populated woodlands', 'Remote woodlands', 
+            'Inhabited treeless & barren lands', 'Wild woodlands', 
+            'Wild treeless and barren lands', 'Ice, uninhabited', 'NODATA')),
+  level = factor(c('Dense settlements', 'Dense settlements', 'Villages', 'Villages', 
+            'Villages', 'Villages', 'Croplands', 'Croplands', 'Croplands', 'Croplands', 
+            'Rangelands', 'Rangelands', 'Rangelands', 'Seminatural', 'Seminatural', 
+            'Seminatural', 'Seminatural', 'Wildlands', 'Wildlands', 'Wildlands', 'NODATA'), 
+            levels = c('Dense settlements', 'Villages', 'Croplands',
+            'Rangelands', 'Seminatural', 'Wildlands', 'NODATA')),
+  type = factor(c('Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 
+           'Used', 'Used', 'Used', 'Used', 'Seminatural', 'Seminatural','Seminatural', 
+           'Seminatural', 'Wild', 'Wild', 'Wild', 'NODATA'), levels = c('Used', 'Seminatural', 'Wild', 'NODATA'))
+)
+
+anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6', 
+                  '#FF73DF', '#00FFC5', '#E6E600', '#FFFF73', '#FFFFBE', 
+                  '#E69800', '#FFD37F', '#FFEBAF', '#38A800', '#A5F57A', 
+                  '#D3FFB2', '#B2B2B2', '#DAF2EA', '#E1E1E1', '#FAFFFF', NA) %>%
+  setNames(key$anthrome_class)
+
+anthrome_level_color <- c('Dense settlements' = '#CD6666', 'Villages' = '#AA66CD', 'Croplands' = '#FFFF00', 
+                 'Rangelands' = '#FFAA00', 'Seminatural' = '#D3FFBE', 'Wildlands' = '#38A800', NODATA = NA)
+
+anthrome_type_color <- c('Used' = '#EDCDCB', 'Seminatural' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
 ```
 
 ```{r}
 anthromes <- here::here('vignettes/data/raw_data/anthromes_all.tif') %>%
   read_stars() %>%
-  setNames('anthrome') %>%
+  setNames('value') %>%
   st_set_dimensions(which = 'band', values = years, name = 'year') %>%
-  filter(between(year, -10000, 0))# %>% 
-  
+  filter(between(year, -10000, 0)) %>%
+  st_crop(bbox)
+```
+
+```{r}
+areas <- st_area(anthromes) %>% 
+  mutate(area = units::set_units(area, km^2)) %>%
+  as_tibble()
+```
+
+```{r}
+anthromes_dat <- anthromes %>% 
+  as_tibble(na.rm = TRUE) %>%
+  filter(!is.na(value)) %>%
+  left_join(anthrome_key, by = 'value') %>%
+  left_join(areas, by = c('x', 'y'))
+```
+
+```{r}
+ggplot(anthromes_dat, aes(x, y, fill = level)) +
+  geom_raster() +
+  coord_quickmap()+
+  theme_void() +
+  facet_wrap(~year) +
+  scale_fill_manual(values = anthrome_level_color)
+```
+
+```{r}
+ggplot() +
+  geom_stars(data = anthromes) +
+  facet_wrap(~year) +
+  scale_fill_manual(values = key$class_color, na.value = 'transparent') +
+  coord_equal() +
+  theme_void()
+```
+
+
+
+```{r}
+plot(anthromes[,,,1])
+```
+
+
+```{r}
 anthromes_polys <- anthromes %>%
 st_as_sf(as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE) %>%
   st_make_valid()
@@ -53,7 +139,13 @@ plot(anthromes[,,,1:6])
 ```
 
 ```{r}
-purrr::map(1:10, ~st_as_sf(anthromes[,,,.], as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE)) %>%
-  rbind -> test
+test <- purrr::map_dfr(1:10, ~mutate(st_as_sf(anthromes[,,,.], as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE), year = .)) %>%
+  mutate(anthrome = as.factor(anthrome))
+
+ggplot(test) +
+  geom_sf(aes(fill = anthrome), color = NA) +
+  scale_fill_viridis_d() +
+  facet_wrap(~year) +
+  theme_void()
 ```
 
