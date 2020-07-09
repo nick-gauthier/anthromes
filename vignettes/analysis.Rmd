@@ -9,6 +9,7 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(stars)
 library(tidyverse)
+library(sf)
 
 anthrome_key <- tibble(
   value = c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
@@ -59,20 +60,17 @@ anthrome_class_color2 <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6'
 
 Import the anthromes raster.
 ```{r, cache=TRUE}
-years <- c(seq(-10000, 0, 1000),
+years <- c(seq(-10000, -1000, 1000), 1,
            seq(100, 1700, 100),
            seq(1710, 2000, 10),
            seq(2001, 2015, 1))
 
 anthromes <- here::here('vignettes/data/raw_data/anthromes_all.tif') %>%
-  read_stars() %>%
+  read_stars(proxy = FALSE) %>%
   setNames('value') %>%
   st_set_dimensions(which = 'band', values = years, name = 'year')
 ```
 
-```{r, fig.width = 12, fig.height=12}
-library(sf)
-```
 
 ```{r, fig.height=12, fig.width=12}
  st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG == 'Southwestern USA') %>%
@@ -96,7 +94,7 @@ st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes
   left_join(anthrome_key, by = 'value') %>%
   ggplot(aes(x, y)) +
   geom_tile(aes(fill = class)) +
-  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent')
+  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent', name = 'Anthrome')
 ```
 
 ```{r}
@@ -113,12 +111,16 @@ st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes
 ```
 
 
-Calculate the cell areas and convert to km2.
-```{r, cache=TRUE}
-areas <- st_area(anthromes) %>% 
-  st_set_crs(st_crs(anthromes)) %>%
-  mutate(area = units::set_units(area, km^2)) %>%
-  as_tibble()
+Import the grid cell land areas from Hyde.
+```{r}
+areas <- here::here('vignettes/data/raw_data/maxln_cr.asc') %>%
+  read_stars() %>%
+  setNames('area') %>%
+  as_tibble() %>%
+  filter(!is.na(area)) %>%
+  mutate_at(c('x', 'y'), round, digits = 5)
+
+total_land_area<- areas %>% pull(area) %>% sum
 ```
 
 Convert the raster into a tibble. Process each time step individualy to save RAM.
@@ -132,31 +134,48 @@ prep_dat <- function(year.index) {
 
 anthromes_dat <- map_dfr(years, prep_dat) %>%
   mutate_at(c('x', 'y'), round, digits = 5) %>%
-  left_join(mutate_at(areas, c('x', 'y'), round, digits = 5), 
-            by = c('x', 'y'))
+  left_join(areas, by = c('x', 'y'))
 ```
 
 
-
 ```{r}
+rm(anthromes)
 gc()
 ```
 
 ```{r}
-anthromes_dat 
+#anthromes_dat %>%
+#  mutate_at(c('year', 'value'), as.integer) %>%
+#write_csv('anthromes_dat.csv')
+
+anthromes_dat %>% 
+  mutate_at(c('year', 'value'), as.integer) %>%
+saveRDS('anthromes_dat')
+```
+
+
+```{r}
+anthromes_dat <- readRDS('anthromes_dat')
+#anthromes_dat <- read_csv('anthromes_dat.csv', col_types = 'ddiid')
 ```
 
 
 ```{r}
 anthromes_summary <- anthromes_dat %>%
-  filter(year <= 2000, !(value %in% c(63, 70))) %>% # get rid of Ice, uninhabited 
+  filter(year <= 2000, value != 70) %>%
   count(year, value, wt = area, name = 'area') %>%
   left_join(anthrome_key, by = 'value') %>%
-  mutate(period = case_when(year %in% seq(-10000, 0, 1000) ~ 'Millennia',
+  mutate(area_percent = area / total_land_area,
+         period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
            year %in% seq(100, 1700, 100) ~ 'Centuries',
            year %in% seq(1710, 2000, 10) ~ 'Decades'),
          period = factor(period, levels = c('Millennia', 'Centuries', 'Decades'))) 
 ```
+
+```{r}
+write_csv(anthromes_summary, 'anthromes_area_summary.csv')
+```
+
 
 ```{r, fig.width=10, fig.height=5}
 anthromes_summary%>%
@@ -169,82 +188,215 @@ anthromes_summary%>%
   theme(legend.position = 'bottom', panel.grid = element_blank())
 ```
 
-```{r, fig.width=12, fig.height=5}
+```{r}
 anthromes_summary%>%
- ggplot(aes(as.factor(year), as.numeric(area))) +
-  geom_col(aes(fill = class, color = class))+ 
+ ggplot(aes(year, as.numeric(area))) +
+  geom_line(aes(color = class), size = 1.1)+ 
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+    theme_bw() +
+  labs(y = expression('Area ' (~km^2))) +
+  theme(legend.position = 'bottom', panel.grid = element_blank())
+```
+
+```{r}
+anthromes_summary%>%
+  group_by(year, level, period) %>%
+  summarise(area = sum(area)) %>%
+ ggplot(aes(year, as.numeric(area))) +
+  geom_line(aes(color = level), size = 1.1)+ 
  facet_wrap(~period, scales = 'free_x') +
-  scale_color_manual(values = anthrome_class_color) +
-  scale_fill_manual(values = anthrome_class_color) +
+  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
+    theme_bw() +
+  labs(y = expression('Area ' (~km^2))) +
+  theme(legend.position = 'bottom', panel.grid = element_blank())
+
+anthromes_summary%>%
+  group_by(year, level) %>%
+  summarise(area = sum(area)) %>%
+ ggplot(aes(year, as.numeric(area))) +
+  geom_line(aes(color = level), size = 1.1)+ 
+  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
+    theme_bw() +
+  labs(y = expression('Area ' (~km^2))) +
+  theme(legend.position = 'bottom', panel.grid = element_blank())
+```
+
+
+```{r, fig.width=11, fig.height=5}
+anthromes_summary %>%
+ ggplot(aes(as.factor(year), area_percent)) +
+  geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
+ # geom_col(aes(fill = class, color = class))+
+ facet_grid(~period, scales = 'free_x', space = 'free') +
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
       theme_classic() +
-  labs(x = 'Year', y = expression('Area ' (~km^2))) +
-  theme(legend.position = 'bottom')
+  scale_y_continuous(labels = scales::percent) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = expression('Percent land surface')) +
+  theme(legend.position = 'bottom', plot.margin = margin(.2, .2,.2, r = .5, unit = 'cm'))
+
+ggsave('anthrome_areas.png', width = 11, height = 5)
+```
+
+```{r}
+biome_key <- tibble(biome_value = 1:15,
+                       biome = c('Tropical rainforest', 'Tropical woodlands', 'Warm mixed forest', 'Temperate mixed forest', 'Temperate deciduous forest', 'Boreal forest', 'Temperate coniferous forest', 'Cool conifer forest', 'Open grasslands, savanna', 'Cool grasslands, steppe', 'Closed shrubland', 'Open shrubland',	'Tundra',	'Hot desert', 'Ice, snow')) %>%
+  # combine biomes 2 + 3 and 5 + 6
+  mutate(biome = if_else(biome_value %in% c(2,3), 'Tropical mixed woodlands', 
+                         if_else(biome_value %in% c(6, 7), 'Northern coniferous forest',
+                         biome)),
+         # define levels so plots have correct order
+         biome = factor(biome, levels = c('Tropical rainforest', 'Tropical mixed woodlands', 'Temperate mixed forest', 'Temperate deciduous forest', 'Northern coniferous forest', 'Cool conifer forest', 'Open grasslands, savanna', 'Cool grasslands, steppe', 'Closed shrubland', 'Open shrubland',	'Tundra',	'Hot desert', 'Ice, snow')))
+```
+
+```{r}
+biomes <- here::here('vignettes/data/raw_data/biome_cr.asc') %>%
+  read_stars() %>%
+  setNames('biome_value') %>%
+  as_tibble() %>%
+  filter(!is.na(biome_value)) %>%
+  mutate_at(c('x', 'y'), round, digits = 5) %>%
+  left_join(biome_key, by = 'biome_value')
+
+biome_summary <- anthromes_dat %>%
+  left_join(biomes, by = c('x', 'y')) %>%
+  filter(year <= 2000, value != 70) %>% 
+  count(year, biome, value, wt = area, name = 'area') %>%
+  left_join(anthrome_key, by = 'value') %>%
+  mutate(area_percent = area / total_land_area,
+         period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+           year %in% seq(100, 1700, 100) ~ 'Centuries',
+           year %in% seq(1710, 2000, 10) ~ 'Decades'),
+         period = factor(period, levels = c('Millennia', 'Centuries', 'Decades'))) 
+
+gc()
+```
+
+
+```{r, fig.height = 12, fig.width = 11}
+biome_summary %>%
+  filter(biome %in% c('Tropical rainforest', 'Tropical mixed woodlands', 'Temperate mixed forest', 'Temperate deciduous forest', 'Northern coniferous forest', 'Cool conifer forest')) %>%
+ # mutate(pretty_biomes = str_wrap(biomes)) %>%
+ ggplot(aes(as.factor(year), area_percent)) +
+  geom_col(aes(fill = class), color = 'lightgrey', size = .1)+ 
+ #facet_grid(biome~period, scales = 'free', space = 'free') +
+   facet_grid(biome~period, scales = 'free', space = 'free_x') +
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+      theme_classic() +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = expression('Percent land surface'))
+
+ggsave('anthromes_summary_forested_biomes.png', height = 12, width = 11)
+```
+
+
+```{r, fig.height = 12, fig.width = 11}
+axis_breaks <- function(x) max(x)
+
+biome_summary %>%
+  filter(!(biome %in% c('Tropical rainforest', 'Tropical mixed woodlands', 'Temperate mixed forest', 'Temperate deciduous forest', 'Northern coniferous forest', 'Cool conifer forest'))) %>%
+ # mutate(pretty_biomes = str_wrap(biomes)) %>%
+ ggplot(aes(as.factor(year), area_percent)) +
+  geom_col(aes(fill = class), color = 'lightgrey', size = .1)+ 
+ #facet_grid(biome~period, scales = 'free', space = 'free') +
+   facet_grid(biome~period, scales = 'free', space = 'free_x') +
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+      theme_classic() +
+  scale_y_continuous(labels = scales::percent_format(accuracy = 1), breaks = scales::pretty_breaks(3)) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = expression('Percent land surface'))
+
+ggsave('anthromes_summary_nonforest_biomes.png', height = 12, width = 11)
+```
+
+
+```{r, fig.width = 10, fig.height=4.5}
+library(treemapify)
+
+anthromes_summary %>%
+  filter(year %in% c(1, 1000, 2000)) %>%
+  mutate(year = paste(year, 'CE')) %>%
+  ggplot(aes(area = as.numeric(area), fill  = class, label = class, subgroup = level)) +
+  geom_treemap() +
+  geom_treemap_subgroup_border(color = 'black') +
+    facet_wrap(~year) +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome')  +
+  theme(legend.position  = 'bottom') +
+  geom_treemap_subgroup_text(reflow = TRUE, fontface = 'italic', alpha = .8)
+
+ggsave('treeplot1.png', width = 10, height = 4.5)
+```
+
+```{r, fig.height=10, fig.width = 10}
+anthromes_summary %>%
+  filter(year %in% c(1700, 1800, 1900, 2000)) %>%
+  mutate(year = paste(year, 'CE')) %>%
+  ggplot(aes(area = as.numeric(area), fill  = class, label = class, subgroup = level)) +
+  geom_treemap() +
+  geom_treemap_subgroup_border(color = 'black') +
+    facet_wrap(~year) +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome')  +
+  theme(legend.position  = 'bottom') +
+  geom_treemap_subgroup_text(reflow = TRUE, fontface = 'italic', alpha = .8)
+
+ggsave('treeplot2.png', width = 10, height = 10)
 ```
 
 
 
 ```{r}
-
+library(ggalluvial)
+test <- anthromes_dat %>% 
+  filter(year %in% c(0, 500, 1000, 1500, 2000)) %>%
+  left_join(anthrome_key)
   
-```
-
-
-```{r}
-ggplot(anthromes_dat, aes(x, y, fill = level)) +
-  geom_raster() +
-  coord_quickmap()+
-  theme_void() +
-  facet_wrap(~year) +
-  scale_fill_manual(values = anthrome_level_color)
+ggplot(test, aes(x = as.factor(year), stratum = level, fill = level, label = level, alluvium = interaction(x,y), y = as.numeric(area))) +
+    geom_flow() +
+  geom_stratum(alpha = .5) +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome')  +
+  theme(legend.position  = 'bottom') +
+  geom_text(stat = 'stratum', size = 3) +
+  theme_minimal()
 ```
 
 ```{r}
-ggplot() +
-  geom_stars(data = anthromes) +
-  facet_wrap(~year) +
-  scale_fill_manual(values = key$class_color, na.value = 'transparent') +
-  coord_equal() +
-  theme_void()
+library(corrplot)
+periods <- anthromes_summary %>%
+  group_by(period) %>%
+  nest
+
+periods %>%
+  mutate(data = map(data, ~  select(., year, area, class) %>%
+  pivot_wider(names_from = class, values_from = area) %>%
+  select(-year) %>%
+    cor)) %>%
+  pull(data) %>%
+  map(~ corrplot(., method = 'color', type = 'lower'))
+
+
+cor.mtest <- function(mat, ...) {
+    mat <- as.matrix(mat)
+    n <- ncol(mat)
+    p.mat<- matrix(NA, n, n)
+    diag(p.mat) <- 0
+    for (i in 1:(n - 1)) {
+        for (j in (i + 1):n) {
+            tmp <- cor.test(mat[, i], mat[, j], ...)
+            p.mat[i, j] <- p.mat[j, i] <- tmp$p.value
+        }
+    }
+  colnames(p.mat) <- rownames(p.mat) <- colnames(mat)
+  p.mat
+}
+
+test2%>%
+  cor %>%
+  corrplot(method = 'color', type = 'lower', order = 'hclust', p.mat = cor.mtest(test2), sig.level = 0.01, insig = 'blank')
 ```
-
-
-
-```{r}
-plot(anthromes[,,,1])
-```
-
-
-```{r}
-anthromes_polys <- anthromes %>%
-st_as_sf(as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE) %>%
-  st_make_valid()
-```
-
-```{r}
-plot(anthromes_polys)
-ggplot() +
-  geom_stars(data = slice(anthromes, 'year', 1:4), downsample = 5) +
-  facet_wrap(~year) +
-  scale_fill_viridis_d(na.value = 'transparent') +
-  coord_equal() +
-  theme_void()
-```
-
-
-```{r}
-test <- st_apply(anthromes, c('x', 'y', 'year'), function(x) st_as_sf(x, as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE))
-
-plot(anthromes[,,,1:6])
-```
-
-```{r}
-test <- purrr::map_dfr(1:10, ~mutate(st_as_sf(anthromes[,,,.], as_points = FALSE, merge = TRUE, use_integer = TRUE, connect8 = TRUE), year = .)) %>%
-  mutate(anthrome = as.factor(anthrome))
-
-ggplot(test) +
-  geom_sf(aes(fill = anthrome), color = NA) +
-  scale_fill_viridis_d() +
-  facet_wrap(~year) +
-  theme_void()
-```
-
