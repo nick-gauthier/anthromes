@@ -173,7 +173,7 @@ anthromes_summary <- anthromes_dat %>%
 ```
 
 ```{r}
-write_csv(anthromes_summary, 'anthromes_area_summary.csv')
+write_csv(anthromes_summary, 'anthromes_summary_all.csv')
 ```
 
 
@@ -239,7 +239,7 @@ anthromes_summary %>%
 
 ggsave('anthrome_areas.png', width = 11, height = 5)
 ```
-
+# Biomes
 ```{r}
 biome_key <- tibble(biome_value = 1:15,
                        biome = c('Tropical rainforest', 'Tropical woodlands', 'Warm mixed forest', 'Temperate mixed forest', 'Temperate deciduous forest', 'Boreal forest', 'Temperate coniferous forest', 'Cool conifer forest', 'Open grasslands, savanna', 'Cool grasslands, steppe', 'Closed shrubland', 'Open shrubland',	'Tundra',	'Hot desert', 'Ice, snow')) %>%
@@ -272,6 +272,8 @@ biome_summary <- anthromes_dat %>%
          period = factor(period, levels = c('Millennia', 'Centuries', 'Decades'))) 
 
 gc()
+
+write_csv(biome_summary, 'anthromes_summary_biomes.csv')
 ```
 
 
@@ -349,7 +351,7 @@ anthromes_summary %>%
 ggsave('treeplot2.png', width = 10, height = 10)
 ```
 
-
+# Alluvial plots
 
 ```{r}
 library(ggalluvial)
@@ -365,6 +367,47 @@ ggplot(test, aes(x = as.factor(year), stratum = level, fill = level, label = lev
   geom_text(stat = 'stratum', size = 3) +
   theme_minimal()
 ```
+
+# ArchaeoGLOBE regions
+```{r, fig.height=12, fig.width=12}
+ st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG == 'Southwestern USA') %>%
+  st_crop(anthromes, .) %>%
+  filter(between(year, 1700, 2000))%>%
+  as_tibble() %>%
+  filter(!is.na(value)) %>%
+  left_join(anthrome_key, by = 'value') %>%
+  ggplot(aes(x, y)) +
+  geom_raster(aes(fill = class)) +
+  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent')
+```
+
+
+```{r}
+st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG %in% c('Turkey', 'Iraq', 'Syria, Cyprus, and the Levant')) %>%
+  st_crop(anthromes, .) %>%
+  filter(between(year, -10000, 0)) %>%
+  as_tibble() %>%
+  filter(!is.na(value)) %>%
+  left_join(anthrome_key, by = 'value') %>%
+  ggplot(aes(x, y)) +
+  geom_tile(aes(fill = class)) +
+  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent', name = 'Anthrome')
+```
+
+```{r}
+st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG %in% c('Tunisia', 'Northern Algeria')) %>%
+  st_crop(anthromes, .) %>%
+  filter(between(year, 0, 500)) %>%
+  as_tibble() %>%
+  filter(!is.na(value)) %>%
+  left_join(anthrome_key, by = 'value') %>%
+  ggplot(aes(x, y)) +
+  geom_tile(aes(fill = class)) +
+  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent') +
+  theme(legend.position = 'bottom')
+```
+
+# Correlograms
 
 ```{r}
 library(corrplot)
