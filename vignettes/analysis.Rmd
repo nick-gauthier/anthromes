@@ -318,6 +318,33 @@ biome_summary %>%
 ggsave('anthromes_summary_nonforest_biomes.png', height = 12, width = 11)
 ```
 
+# Onsets
+
+```{r fig.width = 8, fig.height=12}
+suppressWarnings(
+  onset_seminatural <- anthromes_dat %>%
+  group_by(x,y) %>%
+    filter(value < 61, .preserve = TRUE) %>%
+  summarise(onset = min(year)))
+  
+suppressWarnings(
+  onset_used <- anthromes_dat %>%
+  group_by(x,y) %>%
+   filter(value < 51, .preserve = TRUE) %>%
+  summarise(onset = min(year))
+  )
+
+
+bind_rows(onset_seminatural, onset_used, .id = 'type') %>%
+ggplot(aes(x, y, fill = onset)) +
+  geom_tile() +
+  scale_fill_viridis_c(option = 'A') +
+  facet_wrap(~type, nrow = 2) +
+  coord_quickmap() +
+  theme_void()
+```
+
+
 
 ```{r, fig.width = 10, fig.height=4.5}
 library(treemapify)
