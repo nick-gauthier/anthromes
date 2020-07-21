@@ -10,6 +10,7 @@ knitr::opts_chunk$set(echo = TRUE)
 library(stars)
 library(tidyverse)
 library(sf)
+library(dggridR)
 
 anthrome_key <- tibble(
   value = c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
@@ -298,8 +299,6 @@ ggsave('anthromes_summary_forested_biomes.png', height = 12, width = 11)
 
 
 ```{r, fig.height = 12, fig.width = 11}
-axis_breaks <- function(x) max(x)
-
 biome_summary %>%
   filter(!(biome %in% c('Tropical rainforest', 'Tropical mixed woodlands', 'Temperate mixed forest', 'Temperate deciduous forest', 'Northern coniferous forest', 'Cool conifer forest'))) %>%
  # mutate(pretty_biomes = str_wrap(biomes)) %>%
@@ -320,7 +319,7 @@ ggsave('anthromes_summary_nonforest_biomes.png', height = 12, width = 11)
 
 # Onsets
 
-```{r fig.width = 8, fig.height=12}
+```{r fig.width = 10, fig.height=12}
 suppressWarnings(
   onset_seminatural <- anthromes_dat %>%
   group_by(x,y) %>%
@@ -334,16 +333,77 @@ suppressWarnings(
   summarise(onset = min(year))
   )
 
+suppressWarnings(
+  onset_used <- anthromes_dat %>%
+  group_by(x,y) %>%
+   filter(value < 51, .preserve = TRUE) %>%
+  summarise(onset = min(year))
+  )
+
 
 bind_rows(onset_seminatural, onset_used, .id = 'type') %>%
+  mutate(type = if_else(type == 1, 'Onset of Seminatural Anthromes', 'Onset of Used Anthromes')) %>%
 ggplot(aes(x, y, fill = onset)) +
-  geom_tile() +
-  scale_fill_viridis_c(option = 'A') +
+  geom_raster() +
+  scale_fill_viridis_c(option = 'A', na.value = 'lightgrey') +
   facet_wrap(~type, nrow = 2) +
   coord_quickmap() +
   theme_void()
 ```
 
+```{r}
+dggs <- dgconstruct(res = 12)
+grid <- dgearthgrid(dggs, frame = TRUE)
+plot(grid)
+ggplot(grid, aes(long,lat,group=group)) +
+  geom_polygon() +
+  geom_path(color="white") +
+  coord_map('ortho')
+
+sf::st_as_sf(grid, coords = c("long", "lat")) %>% 
+  group_by(cell, piece) %>% 
+  summarize(do_union=FALSE) %>%
+  st_cast("POLYGON") %>% 
+  ungroup()%>%
+  plot
+```
+
+```{r}
+anthromes %>% slice('year', 1) %>% plot
+```
+
+
+```{r}
+# construct the DGG
+dggs <- dgconstruct(res=12)
+
+#save the DGG
+dgearthgrid(dggs, frame = TRUE, wrapcells = FALSE, savegrid =  "./l12_ISEA3H_dgg.shp")
+
+dgg <- dgconstruct(res = 12) %>%
+  dgearthgrid(frame = TRUE, wrapcells = FALSE, savegrid = 'dgg_l12.shp')
+
+
+grid <- dgconstruct(res = 7) %>%
+  dgearthgrid(frame = FALSE, wrapcells = FALSE) %>%
+  st_as_sf() %>%
+  mutate(id = 1:n()) %>%
+  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30")) %>%
+  .[land_mask, ]
+
+ #%>% st_set_crs('+proj=isea')
+plot(grid)
+```
+
+
+```{r}
+ggplot(grid) +
+  geom_sf(aes(fill = id), color = NA) +
+  scale_fill_viridis_c() +
+  theme_void() +
+    theme_void()#+
+ # coord_sf(crs= "+proj=ortho +lat_0=20 +lon_0=-10") # won't work if dateline is wrapped
+```
 
 
 ```{r, fig.width = 10, fig.height=4.5}
