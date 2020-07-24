@@ -21,9 +21,9 @@ hyde_inputs <- list.files('data/raw_data/hyde_output', full.names = TRUE) %>%
          used = urban + crops + grazing)
 
 fixed_inputs <- list.files('data/raw_data/fixed_input', full.names = TRUE) %>%
-  .[c(1, 4)] %>%# remove greg28_cr.asc, iso_cr.asc
+  .[c(1, 4, 5)] %>%# remove greg28_cr.asc, iso_cr.asc
   read_stars() %>%
-  setNames(c('biome', 'area')) %>%
+  setNames(c('biome', 'area', 'pot_vill')) %>%
   mutate(trees = if_else(biome <= 8, TRUE, FALSE)) # Define the non-woody classes in the BIOME map
 ```
 
@@ -44,7 +44,7 @@ test <- dat %>%
 filter(!is.na(urban)) %>%
   mutate(anthrome = case_when(
       urban >= 0.2 | pop >= 2500 ~ 11,
-      #pop >= 100 & pot_vill == FALSE ~ 12,
+      pop >= 100 & pot_vill == FALSE ~ 12,
       pop >= 100 & rice >= 0.2 ~ 21,
       pop >= 100 & irrigation >= 0.2 ~ 22,
       pop >= 100 & crops >= 0.2 ~ 23,
@@ -87,6 +87,7 @@ test2 <- readRDS('anthromes_dat') %>%
 ```
 
 ```{r}
+library(ggplot2)
 left_join(test2, test) %>%
   mutate(test = value == anthrome) %>%
   ggplot(aes(x, y, fill = test)) +
