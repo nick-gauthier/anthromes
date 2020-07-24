@@ -1,0 +1,70 @@
+---
+title: "reprojection"
+author: "Nick Gauthier"
+date: "7/23/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(raster)
+library(sf)
+library(dplyr)
+library(exactextractr)
+```
+
+
+
+```{r}
+crops <- raster('data/raw_data/hyde_output/cropland2000AD.asc')
+land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc')
+
+crop_prop <- crops / land_area
+land_frac <- land_area / area(land_area)
+```
+
+
+```{r}
+crops_1km <- disaggregate(crops, 10)
+
+plot(crops_1km)
+```
+
+
+```{r}
+dat <- st_read('../l12_dgg_id_area/l12_dgg_id_area.shp') %>%
+  mutate(crops_sum = exact_extract(crops, dgg, 'sum'),
+         crops_mean = exact_extract(crop_prop, dgg, 'mean', na.rm = TRUE),
+         area_sum = exact_extract(land_area, dgg, 'sum'),
+         area_mean = exact_extract(land_frac, dgg, 'mean', na.rm = TRUE))
+```
+
+
+```{r}
+library(ggplot2)
+ggplot(test) +
+  geom_sf(aes(fill = crops), color = NA)
+```
+
+
+```{r}
+area <- raster('vignettes/data/raw_data/fixed_input/maxln_cr.asc')
+```
+
+```{r}
+t1 <- as.data.frame(crops, na.rm = TRUE) %>%
+  pull(cropland2000AD) %>%
+  sum
+```
+
+```{r}
+t2 <- test%>%
+  pull(crops) %>%
+  sum
+```
+
+
+```{r}
+(t1 - t2) /t1
+```
+
