@@ -2,19 +2,26 @@ library(RCurl)
 library(dplyr)
 library(purrr)
 
-url <- 'ftp://ftp.pbl.nl/hyde/hyde3.2/baseline/zip/'
+url_hyde <- 'ftp://ftp.pbl.nl/hyde/hyde3.2/baseline/zip/'
+url_general <- 'ftp://ftp.pbl.nl/hyde/hyde3.2/general_files/'
 
 destination <- '~/Downloads/HYDE/'
 
-filenames <- getURL(url,dirlistonly = TRUE) %>%
+getURL(url_hyde,dirlistonly = TRUE) %>%
   strsplit('\n') %>%
-  unlist()
+  unlist() %>%
+  .[55:150] %>%
+  walk(~download.file(paste0(url_hyde, .), paste0(destination, .)))
 
-walk(filenames, ~download.file(paste0(url, .), paste0(destination, .)))
+getURL(url_general, dirlistonly = TRUE) %>%
+  strsplit('\n') %>%
+  unlist() %>%
+  walk(~download.file(paste0(url_general, .), paste0(destination, .)))
 
 
 # names of the cropland files to extract from the zip files
 hyde_file <- paste0('cropland', time_steps, '.asc')
+
 
 # if not present in raw-data directory, download land use zip files
 # and extract only the cropland file to the raw-data directory
