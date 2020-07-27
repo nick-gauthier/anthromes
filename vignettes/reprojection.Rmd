@@ -9,8 +9,9 @@ output: html_document
 knitr::opts_chunk$set(echo = TRUE)
 library(raster)
 library(sf)
-library(dplyr)
 library(exactextractr)
+library(fasterize)
+library(tidyverse)
 ```
 
 
@@ -23,48 +24,150 @@ crop_prop <- crops / land_area
 land_frac <- land_area / area(land_area)
 ```
 
+```{r}
+dgg_land <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp') %>%
+  mutate(land_area = exact_extract(land_area, ., 'sum')) %>%
+  filter(land_area > 0) %>%
+  tibble::remove_rownames()
+```
 
 ```{r}
-crops_1km <- disaggregate(crops, 10)
-
-plot(crops_1km)
+write_sf(dgg_land, 'l12_ISEA3H_dgg_land.shp')
 ```
 
 
 ```{r}
-dat <- st_read('../l12_dgg_id_area/l12_dgg_id_area.shp') %>%
-  mutate(crops_sum = exact_extract(crops, dgg, 'sum'),
-         crops_mean = exact_extract(crop_prop, dgg, 'mean', na.rm = TRUE),
-         area_sum = exact_extract(land_area, dgg, 'sum'),
-         area_mean = exact_extract(land_frac, dgg, 'mean', na.rm = TRUE))
+#cellStats(land_area, 'sum', na.rm = TRUE)
+```
+
+
+
+```{r}
+test <- brick(crops, land_area) %>%
+  exact_extract(dgg, 'sum')
+```
+
+
+```{r]}
+dat <- dgg %>%
+  mutate(crops_sum = exact_extract(crops, ., 'sum'),
+         crop_prop = exact_extract(crop_prop, ., 'mean'),
+         land_area = exact_extract(land_area, ., 'sum'),
+         land_frac = exact_extract(land_frac, ., 'mean'))
+```
+
+```{r}
+```
+
+```{r}
+dat2 <- st_drop_geometry(dat) %>%
+  filter(land_area> 0)
 ```
 
 
 ```{r}
-library(ggplot2)
-ggplot(test) +
+ggplot(dat) +
   geom_sf(aes(fill = crops), color = NA)
 ```
 
-
 ```{r}
-area <- raster('vignettes/data/raw_data/fixed_input/maxln_cr.asc')
-```
-
-```{r}
-t1 <- as.data.frame(crops, na.rm = TRUE) %>%
+crops_real <- as.data.frame(crops, na.rm = TRUE) %>%
   pull(cropland2000AD) %>%
   sum
-```
 
-```{r}
-t2 <- test%>%
-  pull(crops) %>%
+t2 <- as.data.frame(land_area, na.rm = TRUE) %>%
+  pull(maxln_cr) %>%
   sum
 ```
 
+```{r}
+dat2 %>%
+  summarise(crops_sum = sum(crops_sum, na.rm = TRUE),
+            crops_mean1 = sum(crop_prop * land_area, na.rm = TRUE),
+            crops_mean2 = sum(crop_prop * H_AREA_K_1 * land_frac, na.rm = TRUE)) %>%
+  mutate_all(~(crops_real-.)/crops_real * 100)
+```
 
 ```{r}
-(t1 - t2) /t1
+test3 <- exact_extract(crops, dgg, 'weighted_mean', weights=land_area)
+```
+
+
+
+
+```{r}
+crop_prop_1km <- disaggregate(crops, 10)
+```
+
+```{r, warning=FALSE}
+dgg_rast <- fasterize(dgg, crop_prop_1km, field = 'L1_ID')
+
+dgg_rast_dat <- as.data.frame(brick(dgg_rast, crop_prop_1km), xy = TRUE, na.rm = TRUE)
+```
+
+## all files
+```{r}
+dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
+```
+
+
+```{r}
+hyde_names <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
+recent_years <- str_c(paste0(2001:2011, 'AD'), collapse = '|')
+hyde_files <- list.files('~/Downloads/HYDE', recursive = TRUE, full.names = TRUE)
+
+library(furrr)
+plan(multisession)
+
+suppressWarnings(hyde_rasters <- hyde_files %>%
+  .[str_detect(., hyde_names)] %>% 
+ .[str_detect(., recent_years, negate = TRUE)] %>%
+  map(raster) %>%
+  split(1:8) %>%
+  future_map(brick, .progress = TRUE) %>%
+  brick %>%
+  `crs<-`(value = '+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0'))
+```
+
+```{r}
+hyde_dgg <- hyde_rasters %>%
+  exact_extract(dgg_land, 'sum')
+
+write_csv(hyde_dgg, 'hyde_dgg1.csv')
+```
+
+```{r}
+hyde_dgg <- read_csv('hyde_dgg1.csv')
+```
+
+```{r}
+
+var_names <- names(hyde_dgg) %>%
+  str_extract(hyde_names)
+time_steps <- names(hyde_dgg) %>%
+  str_sub(start = str_length(var_names) + 5) %>%
+  str_remove('_')
+
+new_names <- paste(var_names, time_steps, sep = '.')
+
+test <- hyde_dgg %>%
+    setNames(new_names) %>%
+  mutate(id = 1:n()) %>% #dgg_land$id) %>%
+  #pivot_longer(-id) %>%
+  split(1:5) %>%
+  map_dfr(~gather(., key = 'name', value = 'value', -id) %>%
+  separate(name, into = c('var', 'time_step'), sep = '[.]') %>%
+ # mutate(var = str_extract(name, hyde_names),
+#         time_step =  str_sub(name, start = str_length(var) + 5),
+ #        time_step = str_remove(time_step, '_')) %>% # the population files have an extra _ before the date
+  #dplyr::select(-name) %>%
+  #pivot_wider(names_from = var, values_from = value)
+  spread(var, value))
+```
+
+```{r}
+dgg_land %>% pull(land_area) %>% .[. < .1] %>% sum
+
+hyde_rasters
 ```
 
