@@ -108,53 +108,87 @@ dgg_rast_dat <- as.data.frame(brick(dgg_rast, crop_prop_1km), xy = TRUE, na.rm =
 ## all files
 ```{r}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
+dgg_ids <- dgg_land$id
 ```
 
 
 ```{r}
-hyde_names <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
-recent_years <- str_c(paste0(2001:2011, 'AD'), collapse = '|')
-hyde_files <- list.files('~/Downloads/HYDE', recursive = TRUE, full.names = TRUE)
+hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
 
-library(furrr)
-plan(multisession)
-
-suppressWarnings(hyde_rasters <- hyde_files %>%
-  .[str_detect(., hyde_names)] %>% 
- .[str_detect(., recent_years, negate = TRUE)] %>%
-  map(raster) %>%
-  split(1:8) %>%
-  future_map(brick, .progress = TRUE) %>%
-  brick %>%
-  `crs<-`(value = '+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0'))
-```
-
-```{r}
-hyde_dgg <- hyde_rasters %>%
+hyde2dgg <- function(hyde_varname, hyde_path){
+  suppressWarnings(
+    list.files(hyde_path, recursive = TRUE, full.names = TRUE) %>%
+      str_subset(., hyde_varname) %>% 
+      map(raster) %>%
+      brick %>%
+      `crs<-`(value = '+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0') %>%
   exact_extract(dgg_land, 'sum')
+  )
+}
 
-write_csv(hyde_dgg, 'hyde_dgg1.csv')
+
+hyde_dgg <- hyde_names %>%
+  map(hyde2dgg, '~/Downloads/HYDE/hyde32_output')
 ```
 
 ```{r}
-hyde_dgg <- read_csv('hyde_dgg1.csv')
+saveRDS(hyde_dgg, 'hyde_dgg')
+```
+
+
+
+```{r}
+land_area_rast <- raster('data/raw_data/supporting_5m_grids/maxln_cr.tif')
+pot_veg_rast <- raster('data/raw_data/supporting_5m_grids/potveg15.tif')
+pot_vill_rast <- raster('data/raw_data/supporting_5m_grids/potvill20.tif')
+plot(pot_veg <= 8)
 ```
 
 ```{r}
+fixed_inputs <- dgg_land %>%
+  mutate(area = exact_extract(land_area_rast, ., 'sum'),
+         pot_veg = exact_extract(pot_veg_rast, ., 'mode'),
+         pot_vill = exact_extract(pot_vill_rast, ., 'mode')) %>%
+  mutate(trees = pot_veg <= 8) %>% 
+  select(area:trees) %>%
+  st_drop_geometry() %>%
+  rownames_to_column('id')
+```
+
+does the tree map match what you get by thresholding the biomes later?
+
+
+
+```{r}
+write_csv(fixed_inputs, 'fixed_inputs.csv')
+```
+
+```{r}
+fixed_inputs <- read_csv('fixed_inputs.csv') %>%
+  mutate(id = dgg_ids)
+```
+
+
+
+```{r}
+hyde_dgg <- readRDS('hyde_dgg') %>%
+  bind_cols()
+
+hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
 
 var_names <- names(hyde_dgg) %>%
-  str_extract(hyde_names)
+  str_extract(hyde_names_grepl)
 time_steps <- names(hyde_dgg) %>%
   str_sub(start = str_length(var_names) + 5) %>%
   str_remove('_')
 
 new_names <- paste(var_names, time_steps, sep = '.')
 
-test <- hyde_dgg %>%
+anthromes_dgg <- hyde_dgg %>%
     setNames(new_names) %>%
-  mutate(id = 1:n()) %>% #dgg_land$id) %>%
+  mutate(id = dgg_ids) %>%
   #pivot_longer(-id) %>%
-  split(1:5) %>%
+  split(1:100) %>%
   map_dfr(~gather(., key = 'name', value = 'value', -id) %>%
   separate(name, into = c('var', 'time_step'), sep = '[.]') %>%
  # mutate(var = str_extract(name, hyde_names),
@@ -162,12 +196,90 @@ test <- hyde_dgg %>%
  #        time_step = str_remove(time_step, '_')) %>% # the population files have an extra _ before the date
   #dplyr::select(-name) %>%
   #pivot_wider(names_from = var, values_from = value)
-  spread(var, value))
+  spread(var, value) %>%
+  left_join(fixed_inputs, by = 'id') %>%
+  mutate(crops = cropland / area,
+            grazing = grazing / area,
+            rice = ir_rice / area,
+            pop = popc / area,
+            irrigation = tot_irri / area,
+            urban = uopp / area,
+            used = urban + crops + grazing,
+            .keep = 'unused') %>%
+  anthromes_classify()) %>%
+  spread(time_step, anthrome)
 ```
 
 ```{r}
-dgg_land %>% pull(land_area) %>% .[. < .1] %>% sum
+write_csv(anthromes_dgg, 'anthromes_dgg.csv')
+```
 
-hyde_rasters
+```{r}
+anthromes_dgg <- read_csv('anthromes_dgg.csv')
+```
+
+```{r}
+anthromes_dgg_shp <- left_join(dgg_land, anthromes_dgg, by = 'id')
+  
+write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
+```
+
+```{r}
+ggplot(anthromes_dgg_shp) +
+  geom_sf(aes(fill = as.factor(`1200AD`)), color = NA)
+```
+
+```{r}
+library(nomclust)
+
+time_steps_ordered <- c("10000BC", "9000BC", "8000BC", "7000BC", "6000BC", "5000BC", "4000BC", "3000BC", "2000BC", "1000BC", "0AD", "100AD", "200AD", "300AD", "400AD", "500AD", "600AD", "700AD", "800AD", "900AD", "1000AD", "1100AD", "1200AD", "1300AD", "1400AD", "1500AD", "1600AD",  "1700AD",  "1710AD",  "1720AD",  "1730AD",  "1740AD",  "1750AD",  "1760AD", "1770AD", "1780AD", "1790AD", "1800AD", "1810AD", "1820AD", "1830AD", "1840AD", "1850AD", "1860AD", "1870AD", "1880AD", "1890AD", "1900AD", "1910AD", "1920AD", "1930AD", "1940AD", "1950AD", "1960AD", "1970AD", "1980AD", "1990AD", "2000AD", "2012AD", "2013AD", "2014AD", "2015AD", "2016AD", "2017AD")
+
+ recent_time_steps <-  c("2012AD",  "2013AD",  "2014AD",  "2015AD",  "2016AD",  "2017AD")
+ 
+set.seed(1000)
+clusters <- anthromes_dgg %>%
+  slice_sample(prop = 0.1) %>% 
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
+  filter(!(time_step %in% recent_time_steps)) %>%
+  dplyr::arrange(id, time_step) %>%
+  pivot_wider(names_from = time_step, values_from = anthrome) %>%
+  select(-id) %>%
+  nomclust(prox = FALSE)
+```
+
+```{r}
+
+hyde_dgg_long <- map(hyde_dgg, pivot_hyde)
+
+
+write_csv(hyde_dgg_time, 'hyde_dgg_time.csv')
+```
+
+```{r}
+anthromes_dgg <- hyde_dgg_time %>%
+ # mutate(id = as.character(id)) %>%
+  left_join(fixed_inputs, by = 'id') %>%
+  mutate(crops = cropland / area,
+            grazing = grazing / area,
+            rice = ir_rice / area,
+            pop = popc / area,
+            irrigation = tot_irri / area,
+            urban = uopp / area,
+            used = urban + crops + grazing,
+            .keep = 'unused') %>%
+  anthromes_classify()
+```
+
+
+```{r}
+anthromes_dgg %>%
+  mutate(id = as.integer(id), anthrome = as.integer(anthrome)) %>%
+  pivot_wider(names_from = time_step, values_from = anthrome)
+```
+
+```{r}
+hyde_dgg_time %>%
+  pull(time_step) %>% unique
 ```
 

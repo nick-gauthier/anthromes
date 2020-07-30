@@ -20,11 +20,13 @@ hyde_inputs <- list.files('data/raw_data/hyde_output', full.names = TRUE) %>%
          grazing = conv_rangeland + rangeland + pasture,
          used = urban + crops + grazing)
 
+hyde_inputs[['urban']] %>% range(na.rm = TRUE)
+
 fixed_inputs <- list.files('data/raw_data/fixed_input', full.names = TRUE) %>%
   .[c(1, 4, 5)] %>%# remove greg28_cr.asc, iso_cr.asc
   read_stars() %>%
-  setNames(c('biome', 'area', 'pot_vill')) %>%
-  mutate(trees = if_else(biome <= 8, TRUE, FALSE)) # Define the non-woody classes in the BIOME map
+  setNames(c('pot_veg', 'area', 'pot_vill')) %>%
+  mutate(trees = if_else(pot_veg <= 8, TRUE, FALSE)) # Define the non-woody classes in the pot_veg map
 ```
 
 ```{r}
@@ -69,10 +71,10 @@ filter(!is.na(urban)) %>%
       used >= 0.2 & grazing >= 0.2 ~ 43,  # in python code but not paper
       used >= 0.2 & crops >= grazing ~ 34,
       used >= 0.2 & crops < grazing ~ 43,
-      area > 0 & biome != 15 & trees ~ 61,
-      area > 0 & biome != 15 & !trees ~ 62,
-      area > 0 & biome == 15 & used > 0 ~ 62, # in python code but not paper
-      area > 0 & biome == 15 ~ 63,
+      area > 0 & pot_veg != 15 & trees ~ 61,
+      area > 0 & pot_veg != 15 & !trees ~ 62,
+      area > 0 & pot_veg == 15 & used > 0 ~ 62, # in python code but not paper
+      area > 0 & pot_veg == 15 ~ 63,
       TRUE ~ 70)
       ) %>%
   #select(x, y, anthrome) %>%
