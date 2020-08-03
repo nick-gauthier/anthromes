@@ -13,7 +13,7 @@ library(sf)
 library(dggridR)
 
 anthrome_key <- tibble(
-  value = c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
+  anthrome = c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
             52, 53, 54, 61, 62, 63, 70),
   class = factor(c('Urban', 'Mixed settlements', 'Rice villages', 'Irrigated villages', 
             'Rainfed villages', 'Pastoral villages', 'Residential irrigated croplands',
@@ -57,67 +57,30 @@ anthrome_class_color2 <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6'
                   '#D3FFB2', '#B2B2B2', '#DAF2EA', '#E1E1E1', '#FAFFFF', NA) %>%
   setNames(c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
             52, 53, 54, 61, 62, 63, 70))
-```
 
-Import the anthromes raster.
-```{r, cache=TRUE}
-years <- c(seq(-10000, -1000, 1000), 1,
+time_steps <- c("10000BC", "9000BC", "8000BC", "7000BC", "6000BC", "5000BC", "4000BC", "3000BC", "2000BC", "1000BC", "0AD", "100AD", "200AD", "300AD", "400AD", "500AD", "600AD", "700AD", "800AD", "900AD", "1000AD", "1100AD", "1200AD", "1300AD", "1400AD", "1500AD", "1600AD",  "1700AD",  "1710AD",  "1720AD",  "1730AD",  "1740AD",  "1750AD",  "1760AD", "1770AD", "1780AD", "1790AD", "1800AD", "1810AD", "1820AD", "1830AD", "1840AD", "1850AD", "1860AD", "1870AD", "1880AD", "1890AD", "1900AD", "1910AD", "1920AD", "1930AD", "1940AD", "1950AD", "1960AD", "1970AD", "1980AD", "1990AD", "2000AD", "2001AD", "2002AD", "2003AD", "2004AD", "2005AD", "2006AD", "2007AD", "2008AD", "2009AD", "2010AD", "2011AD", "2012AD", "2013AD", "2014AD", "2015AD", "2016AD", "2017AD") 
+
+time_steps_ordered <- factor(time_steps, levels = time_steps, ordered = TRUE)
+ 
+recent_time_steps <-  c("2012AD",  "2013AD",  "2014AD",  "2015AD",  "2016AD",  "2017AD")
+ 
+ time_steps_millennia <- c("10000BC", "9000BC", "8000BC", "7000BC", "6000BC", "5000BC", "4000BC", "3000BC", "2000BC", "1000BC", "0AD", "1000AD", "2000AD")
+ 
+ time_steps_centuries <- c("0AD", "100AD", "200AD", "300AD", "400AD", "500AD", "600AD", "700AD", "800AD", "900AD", "1000AD", "1100AD", "1200AD", "1300AD", "1400AD", "1500AD", "1600AD",  "1700AD",  "1800AD",  "1900AD", "2000AD", "2010AD")
+ 
+ time_steps_decades <- c("1700AD", "1710AD",  "1720AD",  "1730AD",  "1740AD",  "1750AD",  "1760AD", "1770AD", "1780AD", "1790AD", "1800AD", "1810AD", "1820AD", "1830AD", "1840AD", "1850AD", "1860AD", "1870AD", "1880AD", "1890AD", "1900AD", "1910AD", "1920AD", "1930AD", "1940AD", "1950AD", "1960AD", "1970AD", "1980AD", "1990AD", "2000AD", "2010AD")
+ 
+ years <- c(seq(-10000, -1000, 1000), 1,
            seq(100, 1700, 100),
            seq(1710, 2000, 10),
-           seq(2001, 2015, 1))
+           seq(2001, 2017, 1))
+ 
+time_key <- tibble(time_step = time_steps_ordered, year = years)
 
-anthromes <- here::here('vignettes/data/raw_data/anthromes_all.tif') %>%
-  read_stars(proxy = TRUE) %>%
-  st_set_dimensions(which = 'band', values = years, name = 'year') %>%
-  setNames('value')
-```
-
-
-
-
-Import the grid cell land areas from Hyde.
-```{r}
-areas <- #here::here('vignettes/data/raw_data/maxln_cr.asc') %>%
-  read_stars('data/raw_data/fixed_input/maxln_cr.asc') %>%
-  setNames('area') %>%
-  st_set_crs(st_crs(anthromes))
-
-total_land_area <- areas %>% pull(area) %>% sum(na.rm = TRUE)
-```
-
-
-```{r}
-land_mask <- areas
-land_mask[!is.na(land_mask)] <- 1
-
-land_mask <- st_as_sf(land_mask, merge = TRUE, connect8 = TRUE) %>%
-  st_union()
-```
-
-Convert the raster into a tibble. Process each time step individualy to save RAM.
-```{r, cache=TRUE}
-prep_dat <- function(year.index) {
-  anthromes %>%
-  filter(year == year.index) %>%
-  as_tibble() %>%
-  filter(!is.na(value))
-}
-
-anthromes_dat <- map_dfr(years, prep_dat) %>%
-  mutate_at(c('x', 'y'), round, digits = 5) %>%
-  left_join(areas, by = c('x', 'y'))
-```
-
-
-```{r}
-rm(anthromes)
-gc()
-```
-
-```{r}
-anthromes_dat %>% 
-  mutate_at(c('year', 'value'), as.integer) %>%
-saveRDS('anthromes_dat')
+period_key <- tibble(time_step = time_steps_ordered) %>%
+  mutate(millennia = time_step %in% time_steps_millennia,
+         centuries = time_step %in% time_steps_centuries,
+         decades = time_step %in% time_steps_decades)
 ```
 
 
@@ -133,22 +96,27 @@ dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 fixed_inputs <- read_csv('fixed_inputs.csv') %>%
   mutate(id = dgg_land$id)
 anthromes_dgg <- read_csv('anthromes_dgg.csv')
+
+total_land_area <- sum(fixed_inputs$area)
 ```
 
 # Summary
 ```{r}
-anthromes_dgg %>% 
-  left_join(fixed_inputs, by = 'id')
-
-anthromes_summary <- anthromes_dat %>%
-  filter(year <= 2000, value != 70) %>%
-  count(year, value, wt = area, name = 'area') %>%
-  left_join(anthrome_key, by = 'value') %>%
-  mutate(area_percent = area / total_land_area,
-         period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-           year %in% seq(100, 1700, 100) ~ 'Centuries',
-           year %in% seq(1710, 2000, 10) ~ 'Decades'),
-         period = factor(period, levels = c('Millennia', 'Centuries', 'Decades'))) 
+anthromes_summary <- anthromes_dgg %>% 
+  left_join(fixed_inputs, by = 'id') %>%
+  select(-pot_veg, -pot_vill, -trees) %>%
+  pivot_longer(-c(id, area), names_to = 'time_step', values_to = 'anthrome') %>%
+  count(time_step, anthrome, wt = area, name = 'area') %>%
+  mutate(percent_land_area = area / total_land_area) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in% seq(1710, 2000, 10) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  filter(year <= 2000) %>%
+  arrange(year, anthrome) %>%
+  select(time_step, anthrome, class, percent_land_area, period, year)
 ```
 
 ```{r}
@@ -156,54 +124,9 @@ write_csv(anthromes_summary, 'anthromes_summary_all.csv')
 ```
 
 
-```{r, fig.width=10, fig.height=5}
-anthromes_summary%>%
- ggplot(aes(year, as.numeric(area))) +
-  geom_line(aes(color = class), size = 1.1)+ 
- facet_wrap(~period, scales = 'free_x') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
-    theme_bw() +
-  labs(y = expression('Area ' (~km^2))) +
-  theme(legend.position = 'bottom', panel.grid = element_blank())
-```
-
-```{r}
-anthromes_summary%>%
- ggplot(aes(year, as.numeric(area))) +
-  geom_line(aes(color = class), size = 1.1)+ 
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
-    theme_bw() +
-  labs(y = expression('Area ' (~km^2))) +
-  theme(legend.position = 'bottom', panel.grid = element_blank())
-```
-
-```{r}
-anthromes_summary%>%
-  group_by(year, level, period) %>%
-  summarise(area = sum(area)) %>%
- ggplot(aes(year, as.numeric(area))) +
-  geom_line(aes(color = level), size = 1.1)+ 
- facet_wrap(~period, scales = 'free_x') +
-  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
-    theme_bw() +
-  labs(y = expression('Area ' (~km^2))) +
-  theme(legend.position = 'bottom', panel.grid = element_blank())
-
-anthromes_summary%>%
-  group_by(year, level) %>%
-  summarise(area = sum(area)) %>%
- ggplot(aes(year, as.numeric(area))) +
-  geom_line(aes(color = level), size = 1.1)+ 
-  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
-    theme_bw() +
-  labs(y = expression('Area ' (~km^2))) +
-  theme(legend.position = 'bottom', panel.grid = element_blank())
-```
-
-
 ```{r, fig.width=11, fig.height=5}
 anthromes_summary %>%
- ggplot(aes(as.factor(year), area_percent)) +
+ ggplot(aes(as.factor(year), percent_land_area)) +
   geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
  # geom_col(aes(fill = class, color = class))+
  facet_grid(~period, scales = 'free_x', space = 'free') +
@@ -218,6 +141,7 @@ anthromes_summary %>%
 
 ggsave('anthrome_areas.png', width = 11, height = 5)
 ```
+
 # Biomes
 ```{r}
 biome_key <- tibble(biome_value = 1:15,
