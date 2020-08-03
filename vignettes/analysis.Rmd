@@ -67,61 +67,31 @@ years <- c(seq(-10000, -1000, 1000), 1,
            seq(2001, 2015, 1))
 
 anthromes <- here::here('vignettes/data/raw_data/anthromes_all.tif') %>%
-  read_stars(proxy = FALSE) %>%
-  setNames('value') %>%
-  st_set_dimensions(which = 'band', values = years, name = 'year')
+  read_stars(proxy = TRUE) %>%
+  st_set_dimensions(which = 'band', values = years, name = 'year') %>%
+  setNames('value')
 ```
 
 
-```{r, fig.height=12, fig.width=12}
- st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG == 'Southwestern USA') %>%
-  st_crop(anthromes, .) %>%
-  filter(between(year, 1700, 2000))%>%
-  as_tibble() %>%
-  filter(!is.na(value)) %>%
-  left_join(anthrome_key, by = 'value') %>%
-  ggplot(aes(x, y)) +
-  geom_raster(aes(fill = class)) +
-  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent')
-```
-
-
-```{r}
-st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG %in% c('Turkey', 'Iraq', 'Syria, Cyprus, and the Levant')) %>%
-  st_crop(anthromes, .) %>%
-  filter(between(year, -10000, 0)) %>%
-  as_tibble() %>%
-  filter(!is.na(value)) %>%
-  left_join(anthrome_key, by = 'value') %>%
-  ggplot(aes(x, y)) +
-  geom_tile(aes(fill = class)) +
-  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent', name = 'Anthrome')
-```
-
-```{r}
-st_read('~/Downloads/ArchaeGLOBE_Regions.shp') %>% st_transform(st_crs(anthromes)) %>% filter(Archaeo_RG %in% c('Tunisia', 'Northern Algeria')) %>%
-  st_crop(anthromes, .) %>%
-  filter(between(year, 0, 500)) %>%
-  as_tibble() %>%
-  filter(!is.na(value)) %>%
-  left_join(anthrome_key, by = 'value') %>%
-  ggplot(aes(x, y)) +
-  geom_tile(aes(fill = class)) +
-  facet_wrap(~year) + coord_quickmap() + theme_void() +scale_fill_manual(values = anthrome_class_color, na.value = 'transparent') +
-  theme(legend.position = 'bottom')
-```
 
 
 Import the grid cell land areas from Hyde.
 ```{r}
-areas <- here::here('vignettes/data/raw_data/maxln_cr.asc') %>%
-  read_stars() %>%
+areas <- #here::here('vignettes/data/raw_data/maxln_cr.asc') %>%
+  read_stars('data/raw_data/fixed_input/maxln_cr.asc') %>%
   setNames('area') %>%
-  as_tibble() %>%
-  filter(!is.na(area)) %>%
-  mutate_at(c('x', 'y'), round, digits = 5)
+  st_set_crs(st_crs(anthromes))
 
-total_land_area<- areas %>% pull(area) %>% sum
+total_land_area <- areas %>% pull(area) %>% sum(na.rm = TRUE)
+```
+
+
+```{r}
+land_mask <- areas
+land_mask[!is.na(land_mask)] <- 1
+
+land_mask <- st_as_sf(land_mask, merge = TRUE, connect8 = TRUE) %>%
+  st_union()
 ```
 
 Convert the raster into a tibble. Process each time step individualy to save RAM.
@@ -145,10 +115,6 @@ gc()
 ```
 
 ```{r}
-#anthromes_dat %>%
-#  mutate_at(c('year', 'value'), as.integer) %>%
-#write_csv('anthromes_dat.csv')
-
 anthromes_dat %>% 
   mutate_at(c('year', 'value'), as.integer) %>%
 saveRDS('anthromes_dat')
@@ -160,8 +126,20 @@ anthromes_dat <- readRDS('anthromes_dat')
 #anthromes_dat <- read_csv('anthromes_dat.csv', col_types = 'ddiid')
 ```
 
+# DGG Data
 
 ```{r}
+dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
+fixed_inputs <- read_csv('fixed_inputs.csv') %>%
+  mutate(id = dgg_land$id)
+anthromes_dgg <- read_csv('anthromes_dgg.csv')
+```
+
+# Summary
+```{r}
+anthromes_dgg %>% 
+  left_join(fixed_inputs, by = 'id')
+
 anthromes_summary <- anthromes_dat %>%
   filter(year <= 2000, value != 70) %>%
   count(year, value, wt = area, name = 'area') %>%
@@ -395,6 +373,14 @@ grid <- dgconstruct(res = 7) %>%
 plot(grid)
 ```
 
+```{r}
+dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
+
+dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
+
+test <- dgg12[st_union(land_mask), ]
+```
+
 
 ```{r}
 ggplot(grid) +
@@ -405,6 +391,19 @@ ggplot(grid) +
  # coord_sf(crs= "+proj=ortho +lat_0=20 +lon_0=-10") # won't work if dateline is wrapped
 ```
 
+# Trajectory Clusters
+
+```{r}
+library(nomclust)
+clusters <- anthromes %>% 
+  st_as_stars(downsample = 6) %>%
+  as_tibble() %>%
+  filter(!is.na(value)) %>%
+  filter(band <= 60) %>%
+  pivot_wider(names_from = band, values_from = value) %>%
+  select(-x, -y) %>%
+  nomclust(prox = FALSE)
+```
 
 ```{r, fig.width = 10, fig.height=4.5}
 library(treemapify)
