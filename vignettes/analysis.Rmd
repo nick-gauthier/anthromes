@@ -273,28 +273,7 @@ ggplot() +
   facet_wrap(~type, nrow = 2) 
 ```
 
-```{r}
-dggs <- dgconstruct(res = 12)
-grid <- dgearthgrid(dggs, frame = TRUE)
-plot(grid)
-ggplot(grid, aes(long,lat,group=group)) +
-  geom_polygon() +
-  geom_path(color="white") +
-  coord_map('ortho')
-
-sf::st_as_sf(grid, coords = c("long", "lat")) %>% 
-  group_by(cell, piece) %>% 
-  summarize(do_union=FALSE) %>%
-  st_cast("POLYGON") %>% 
-  ungroup()%>%
-  plot
-```
-
-```{r}
-anthromes %>% slice('year', 1) %>% plot
-```
-
-
+DGG
 ```{r}
 # construct the DGG
 dggs <- dgconstruct(res=12)
@@ -321,209 +300,61 @@ plot(grid)
 dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
 
 dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
-
-test <- dgg12[st_union(land_mask), ]
 ```
 
+# Regression
 
 ```{r}
-ggplot(grid) +
-  geom_sf(aes(fill = id), color = NA) +
-  scale_fill_viridis_c() +
-  theme_void() +
-    theme_void()#+
- # coord_sf(crs= "+proj=ortho +lat_0=20 +lon_0=-10") # won't work if dateline is wrapped
+library(raster)
+hfp <- raster::raster('data/raw_data/hfp2000_merisINT.tif')
+plot(hfp)
+
+dgg_mollweide <- an12_dgg_inputs %>%
+  st_set_crs(4326) %>%
+  st_transform(st_crs(hfp))
+
+library(exactextractr)
+hfp_extract <- exact_extract(hfp, dgg_mollweide, fun = c('max', 'mean'))
+
+hfp_dgg <- dgg_mollweide %>%
+  bind_cols(hfp_extract) %>%
+  st_transform(4326)
+
+ggplot(hfp_dgg) +
+  geom_sf(aes(fill = max), color = NA) +
+  scale_fill_viridis_c()
 ```
-# Trajectory Clusters
 
 ```{r}
-library(nomclust)
-
-
-set.seed(1000)
-cluster_samp <- an12_dgg %>%
-  slice_sample(prop = 0.01, weight_by = an12_dgg_inputs$land_area) %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-   dplyr::arrange(id, time_step) %>%
+test_dat <- an12_dgg %>%
+  pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
   left_join(anthrome_key) %>%
-  select(id, time_step, level)
+  dplyr::select(-anthrome, -level, -type) %>%
+  pivot_wider(names_from = time, values_from = class) %>%
+  mutate(hfp_max = hfp_dgg$max)
+
+mod1 <-
+mille
+AIC(mod1)
+
+calc_aic <- function(predictor){
+  as.f
+ 
+}
+
+test_aic <- c(`10000BC`, `9000BC`, `8000BC`, `7000BC`, `6000BC`, `5000BC`, `4000BC`, `3000BC`, `2000BC`, `1000BC`, `0AD`, `1000AD`, `2000AD`) %>%
+  map_dbl(calc_aic)
 
 
-cluster_samp_millennia <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_millennia) %>%
-  pivot_wider(names_from = time_step, values_from = level)
-
-cluster_samp_centuries <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_centuries) %>%
-  pivot_wider(names_from = time_step, values_from = level)
-
-cluster_samp_decades <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_decades) %>%
-  pivot_wider(names_from = time_step, values_from = level)
-
-clusters <- list(cluster_samp_millennia, cluster_samp_centuries, cluster_samp_decades) %>%
-  map(~select(., -id) %>% nomclust(prox = FALSE))
-
-```
-
-```{r}
-#arrange this by latitide!
-cluster_samp_centuries %>%
-  mutate(cluster = clusters[[1]]$mem$clu_4) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'level') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-     dplyr::mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
-  left_join(time_key) %>%
-  ggplot(aes(year, as.character(id))) +
-  geom_tile(aes(fill = level)) +
-  facet_wrap(~cluster, scales = 'free_y') +
-    scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level')
-```
-
-```{r}
-library(mgcv)
-cores <- max(parallel::detectCores() / 2, 1) # physical cores for parallelization
-cl <- parallel::makeCluster(cores)
-
-test.dat <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_centuries) %>%
-       dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered, ordered = TRUE)) %>%
-  left_join(time_key) %>%
-  mutate(level = factor(level, levels = rev(c('Dense settlements', 'Villages', 'Croplands',
-            'Rangelands', 'Seminatural', 'Wildlands')), ordered = TRUE),
-         id = as.factor(id),
-         anthrome_level = as.numeric(level))
-  
-test_gam <- bam(anthrome_level ~ s(year, id, bs = 'fs', k = 5) , data = test.dat, family = ocat(R = 6), discrete = TRUE)
-#s(year, bs = 'cr', m = 2) + s(year, by = id, bs = 'cs', m = 1) +  s(id, bs = 're')
-plot(test_gam)
-
-rm(test_gam)
-
-plot(test_gam)
-```
-
-```{r}
-
+c(lm(hfp_max ~ `2000AD`, data = test_dat) %>% AIC,
+    lm(hfp_max ~ `1900AD`, data = test_dat) %>% AIC,
+      lm(hfp_max ~ `1800AD`, data = test_dat) %>% AIC,
+        lm(hfp_max ~ `1700AD`, data = test_dat) %>% AIC,
+          lm(hfp_max ~ `1600AD`, data = test_dat) %>% AIC,
+           lm(hfp_max ~ `1500AD`, data = test_dat) %>% AIC) %>% plot
 ```
 
 
-```{r}
-map(clusters, ~.$opt)
-```
-
-```{r}
-cluster_samp_decades %>%
-  mutate(cluster = clusters[[3]]$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  ggplot(aes(time_step, anthrome, group = id, color = as.factor(cluster))) +
-  geom_line(alpha = .5, size = 1.2) +
-  facet_wrap(~cluster) +
-  theme_classic()
-```
-
-```{r}
-cluster_samp_millennia %>%
-  mutate(cluster = clusters[[1]]$mem$clu_6) %>%
-    pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = raster::modal(anthrome))
-
-cluster_samp_centuries %>%
-  mutate(cluster = clusters[[2]]$mem$clu_6) %>%
-    pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = raster::modal(anthrome))
-
-cluster_samp_decades %>%
-  mutate(cluster = clusters[[3]]$mem$clu_6) %>%
-    pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = raster::modal(anthrome))
-```
-
-
-```{r}
-cluster_samp %>%
-   filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_millennia) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  mutate(cluster = clusters_millennia$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  ggplot(aes(time_step, anthrome, group = id, color = as.factor(cluster))) +
-  geom_line(alpha = .5, size = 1.2) +
-  facet_wrap(~cluster) +
-  theme_classic()
-
-cluster_samp %>%
-   filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_centuries) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  mutate(cluster = clusters_centuries$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  ggplot(aes(time_step, anthrome, group = id, color = as.factor(cluster))) +
-  geom_line(alpha = .5, size = 1.2) +
-  facet_wrap(~cluster) +
-  theme_classic()
-
-cluster_samp %>%
-   filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_decades) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  mutate(cluster = clusters_decades$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  ggplot(aes(time_step, anthrome, group = id, color = as.factor(cluster))) +
-  geom_line(alpha = .5, size = 1.2) +
-  facet_wrap(~cluster) +
-  theme_classic()
-```
-
-```{r}
-cluster_samp %>%
-   filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_millennia) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  mutate(cluster = clusters_millennia$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = raster::modal(anthrome)) %>%
-  left_join(anthrome_key, by = 'anthrome')
-
-cluster_samp %>%
-   filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_centuries) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  mutate(cluster = clusters_centuries$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = raster::modal(anthrome)) %>%
-  left_join(anthrome_key, by = 'anthrome')
-
-cluster_samp %>%
-   filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_decades) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  mutate(cluster = clusters_decades$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = raster::modal(anthrome)) %>%
-  left_join(anthrome_key, by = 'anthrome')
-```
 
 # Treemap
 
