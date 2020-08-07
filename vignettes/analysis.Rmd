@@ -157,12 +157,31 @@ anthromes_summary <- an12_dgg %>%
 write_csv(anthromes_summary, 'an12_dgg_summary.csv')
 ```
 
+```{r}
+hyde_pop <- read_csv('hyde_dgg_time.csv') %>%
+  filter(id %in% an12_dgg$id) %>%
+  group_by(time_step) %>%
+  summarise(population = sum(popc)) %>%
+  left_join(time_key) %>%
+  select(year, population) %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in% seq(1710, 2000, 10) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  filter(year <= 2000) %>%
+  mutate(pop_percent = population / max(population))
+```
+
 
 ```{r, fig.width=11, fig.height=5}
 anthromes_summary %>%
  ggplot(aes(as.factor(year), percent_land_area)) +
-  geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
- # geom_col(aes(fill = class, color = class))+
+#  geom_area(aes(fill = class, color = class), position = 'stack') +
+#  geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
+  geom_col(aes(fill = class, color = class), size = 1)+
+  geom_hline(yintercept = c(.25, .50, .75), linetype = 2, alpha = .3) +
+  geom_line(data = hyde_pop, aes(x = as.factor(year), y = pop_percent), group = 1) + 
+  geom_label(aes(label = label), data = tibble(year = 1830,  percent_land_area = .1, label = 'Population', period = factor('Decades', c('Millennia', 'Centuries', 'Decades')))) +
  facet_grid(~period, scales = 'free_x', space = 'free') +
   scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
   scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
@@ -170,7 +189,7 @@ anthromes_summary %>%
   scale_y_continuous(labels = scales::percent) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
-  labs(x = 'Year', y = expression('Percent land surface')) +
+  labs(x = 'Year', y = 'Percent land surface') +
   theme(legend.position = 'bottom', plot.margin = margin(.2, .2,.2, r = .5, unit = 'cm'))
 
 ggsave('anthrome_areas.png', width = 11, height = 5)
