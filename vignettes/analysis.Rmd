@@ -261,7 +261,56 @@ biome_summary %>%
 
 ggsave('anthromes_summary_nonforest_biomes.png', height = 12, width = 11)
 ```
+# Regions
 
+
+```{r}
+library(exactextractr)
+regions_dgg <- raster::raster('../simple_regions.tif') %>% plot
+  exact_extract(an12_dgg_inputs, 'mode')
+  
+region_key <- tibble(region = 1:8, region_name = c('Eurasia', 'Latin America and Caribbean', 'Near East', 'Africa', 'Asia', 'Europe', 'North America', 'Oceania'))
+
+region_summary <- an12_dgg %>% 
+  mutate(region = regions_dgg, land_area = an12_dgg_inputs$land_area) %>%
+  pivot_longer(-c(id, land_area, region), names_to = 'time_step', values_to = 'anthrome') %>%
+    mutate(anthrome= as.factor(anthrome), region = as.factor(region)) %>%
+  count(time_step, anthrome, region, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+  mutate(percent_land_area = land_area / total_land_area,
+                  anthrome = as.numeric(as.character(anthrome)),
+         region = as.numeric(as.character(region))) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in% seq(1710, 2000, 10) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  filter(year <= 2000) %>% # this should be redundant
+  arrange(year, region, anthrome) %>%
+    left_join(region_key) %>%
+  select(time_step, region_name, anthrome, class, percent_land_area, period, year)
+
+write_csv(region_summary, 'an12_dgg_summary_region.csv')
+```
+
+
+```{r, fig.height = 12, fig.width = 11}
+region_summary %>% 
+ # mutate(pretty_biomes = str_wrap(biomes)) %>%
+ ggplot(aes(as.factor(year), percent_land_area)) +
+  geom_col(aes(fill = class), color = 'lightgrey', size = .1)+ 
+ #facet_grid(biome~period, scales = 'free', space = 'free') +
+   facet_grid(region_name~period, scales = 'free', space = 'free_x') +
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+      theme_classic() +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = expression('Percent land surface'))
+
+ggsave('anthromes_summary_region.png', height = 12, width = 11)
+```
 # Onsets
 
 ```{r fig.width = 10, fig.height=12}
