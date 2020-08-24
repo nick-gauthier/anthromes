@@ -92,45 +92,18 @@ biome_key <- tibble(biome_value = 1:15,
          biome = factor(biome, levels = c('Tropical rainforest', 'Tropical mixed woodlands', 'Temperate mixed forest', 'Temperate deciduous forest', 'Northern coniferous forest', 'Cool conifer forest', 'Open grasslands, savanna', 'Cool grasslands, steppe', 'Closed shrubland', 'Open shrubland',	'Tundra',	'Hot desert', 'Ice, snow')))
 ```
 
-# DGG Data
+# Setup
 
-
-Creating land masks
-```{r}
-dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
-
-land_mask <- read_sf('../an12_dgg_cells.shp') %>%
-  filter(DGG_status == 3) %>%
-  pull(ANL12_ID)
-
-fixed_inputs <- read_csv('fixed_inputs.csv') %>%
-  mutate(id = dgg_land$id)
-
-an12_fixed_inputs <- dgg_land %>% 
-  filter(id %in% land_mask) %>% 
-  left_join(fixed_inputs) %>%
-  select(id, land_area, pot_veg, pot_vill, geometry)
-
-an12_dgg <- read_csv('anthromes_dgg.csv') %>%
-  filter(id %in% an12_dgg_inputs$id)%>%
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(time_key) %>%
-  filter(year <= 2000) %>%
-  arrange(id, year, anthrome) %>%
-  mutate(id = as.integer(id), anthrome = as.integer(anthrome)) %>%
-  select(-year) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome)
-
-write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
-write_csv(an12_dgg, 'an12_dgg.csv')
-```
+Import preprocessed data.
 
 ```{r}
-an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')
+an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')  %>% st_set_crs(4326)
 an12_dgg <- read_csv('an12_dgg.csv')
 
 total_land_area <- sum(an12_dgg_inputs$land_area)
 ```
+
+
 
 # Summary
 ```{r}
@@ -180,24 +153,22 @@ anthromes_summary %>%
 #  geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
   geom_col(aes(fill = class, color = class), size = 1)+
   geom_hline(yintercept = c(.25, .50, .75), linetype = 2, alpha = .3) +
-  geom_line(data = hyde_pop, aes(x = as.factor(year), y = pop_percent), group = 1) + 
-  geom_label(aes(label = label), data = tibble(year = 1830,  percent_land_area = .1, label = 'Population', period = factor('Decades', c('Millennia', 'Centuries', 'Decades')))) +
+  geom_line(data = hyde_pop, aes(x = as.factor(year), y = pop_percent), color = 'maroon', linetype = 1, group = 1, size = 1.2) + 
+  #geom_label(aes(label = label), data = tibble(year = 20010,  percent_land_area = 1, label = 'Population', period = factor('Decades', c('Millennia', 'Centuries', 'Decades')))) +
  facet_grid(~period, scales = 'free_x', space = 'free') +
   scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
   scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
       theme_classic() +
-  scale_y_continuous(labels = scales::percent) +
+  scale_y_continuous(labels = scales::percent, expand = c(0,0.02)) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land surface') +
   theme(legend.position = 'bottom', plot.margin = margin(.2, .2,.2, r = .5, unit = 'cm'))
 
-ggsave('anthrome_areas.png', width = 11, height = 5)
+ggsave('anthrome_areas_population.png', width = 11, height = 5)
 ```
 
-# Biomes
-
-
+## Biome summary
 ```{r}
 biome_summary <- an12_dgg %>% 
   left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
@@ -261,8 +232,8 @@ biome_summary %>%
 
 ggsave('anthromes_summary_nonforest_biomes.png', height = 12, width = 11)
 ```
-# Regions
 
+## Region summary
 
 ```{r}
 library(exactextractr)
@@ -311,8 +282,8 @@ region_summary %>%
 
 ggsave('anthromes_summary_region.png', height = 12, width = 11)
 ```
-# Onsets
 
+# Onsets
 ```{r fig.width = 10, fig.height=12}
 suppressWarnings(
   onset_seminatural <- an12_dgg %>%
@@ -335,6 +306,7 @@ bind_rows(onset_seminatural, onset_used, .id = 'type') %>%
   mutate(type = if_else(type == 1, 'Onset of Seminatural Anthromes', 'Onset of Used Anthromes')) %>%
   left_join(an12_dgg_inputs) %>%
   left_join(time_key, by = c('onset' = 'year')) %>%
+  
 ggplot() +
   geom_sf(aes(fill = onset, geometry = geometry), color = NA)+
   scale_fill_viridis_c(option = 'A', na.value = 'lightgrey') +

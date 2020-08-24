@@ -256,21 +256,6 @@ hyde_dgg_long <- map(hyde_dgg, pivot_hyde)
 write_csv(hyde_dgg_time, 'hyde_dgg_time.csv')
 ```
 
-```{r}
-anthromes_dgg <- hyde_dgg_time %>%
- # mutate(id = as.character(id)) %>%
-  left_join(fixed_inputs, by = 'id') %>%
-  mutate(crops = cropland / area,
-            grazing = grazing / area,
-            rice = ir_rice / area,
-            pop = popc / area,
-            irrigation = tot_irri / area,
-            urban = uopp / area,
-            used = urban + crops + grazing,
-            .keep = 'unused') %>%
-  anthromes_classify()
-```
-
 
 ```{r}
 anthromes_dgg %>%
@@ -283,3 +268,37 @@ hyde_dgg_time %>%
   pull(time_step) %>% unique
 ```
 
+#####
+Create final masks and grids
+
+Creating land masks
+```{r, eval = FALSE}
+dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
+
+#this is erles mask
+land_mask <- read_sf('../an12_dgg_cells.shp') %>%
+  filter(DGG_status == 3) %>%
+  pull(ANL12_ID)
+
+fixed_inputs <- read_csv('fixed_inputs.csv') %>%
+  mutate(id = dgg_land$id)
+
+an12_fixed_inputs <- dgg_land %>% 
+  filter(id %in% land_mask) %>% 
+  left_join(fixed_inputs) %>%
+  select(id, land_area, pot_veg, pot_vill, geometry) %>%
+    st_set_crs(4326)
+
+an12_dgg <- read_csv('anthromes_dgg.csv') %>%
+  filter(id %in% an12_dgg_inputs$id)%>%
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  left_join(time_key) %>%
+  filter(year <= 2000) %>%
+  arrange(id, year, anthrome) %>%
+  mutate(id = as.integer(id), anthrome = as.integer(anthrome)) %>%
+  select(-year) %>%
+  pivot_wider(names_from = time_step, values_from = anthrome)
+
+write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
+write_csv(an12_dgg, 'an12_dgg.csv')
+```
