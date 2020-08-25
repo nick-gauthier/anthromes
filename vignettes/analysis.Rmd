@@ -130,6 +130,8 @@ anthromes_summary <- an12_dgg %>%
 write_csv(anthromes_summary, 'an12_dgg_summary.csv')
 ```
 
+
+Get hyde population data.
 ```{r}
 hyde_pop <- read_csv('hyde_dgg_time.csv') %>%
   filter(id %in% an12_dgg$id) %>%
@@ -145,6 +147,7 @@ hyde_pop <- read_csv('hyde_dgg_time.csv') %>%
   mutate(pop_percent = population / max(population))
 ```
 
+Summary by total land area.
 
 ```{r, fig.width=11, fig.height=5}
 anthromes_summary %>%
@@ -195,6 +198,7 @@ write_csv(biome_summary, 'an12_dgg_summary_biomes.csv')
 
 
 ```{r, fig.height = 12, fig.width = 11}
+# there are still horizontal lines from the combined biomes ... or something else
 biome_summary %>%
   filter(biome %in% c('Tropical rainforest', 'Tropical mixed woodlands', 'Temperate mixed forest', 'Temperate deciduous forest', 'Northern coniferous forest', 'Cool conifer forest')) %>%
  # mutate(pretty_biomes = str_wrap(biomes)) %>%
@@ -284,33 +288,41 @@ ggsave('anthromes_summary_region.png', height = 12, width = 11)
 ```
 
 # Onsets
-```{r fig.width = 10, fig.height=12}
+```{r}
 suppressWarnings(
   onset_seminatural <- an12_dgg %>%
     pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
   group_by(id) %>%
-    filter(anthrome < 61, .preserve = TRUE) %>%
+    filter(anthrome < 61) %>%
     left_join(time_key) %>%
-  summarise(onset = min(year)))
+  summarise(onset = min(year))
 
 
-suppressWarnings(
   onset_used <- an12_dgg %>%
     pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
   group_by(id) %>%
-    filter(anthrome < 51, .preserve = TRUE) %>%
+    filter(anthrome < 51) %>%
     left_join(time_key) %>%
-  summarise(onset = min(year)))
+  summarise(onset = min(year))
+)
 
-bind_rows(onset_seminatural, onset_used, .id = 'type') %>%
-  mutate(type = if_else(type == 1, 'Onset of Seminatural Anthromes', 'Onset of Used Anthromes')) %>%
-  left_join(an12_dgg_inputs) %>%
+onsets <- bind_rows(select(an12_dgg_inputs, id) %>% left_join(onset_seminatural), 
+                    select(an12_dgg_inputs, id) %>% left_join(onset_used), .id = 'type') %>%
+ mutate(type = if_else(type == 1, 'Onset of Seminatural Anthromes', 'Onset of Used Anthromes')) %>%
   left_join(time_key, by = c('onset' = 'year')) %>%
-  
+  st_as_sf() %>%
+  st_set_crs(4326)
+```
+
+
+```{r fig.width = 10, fig.height=12}
+onsets %>%
+ #   st_crop(st_bbox(c(xmin = 20, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
 ggplot() +
   geom_sf(aes(fill = onset, geometry = geometry), color = NA)+
-  scale_fill_viridis_c(option = 'A', na.value = 'lightgrey') +
-  facet_wrap(~type, nrow = 2) 
+  scale_fill_viridis_c(option = 'A', na.value = 'lightgrey', direction = 1, trans = 'pseudo_log') +
+  facet_wrap(~type, nrow = 2)  +
+  theme_bw()
 ```
 
 DGG
