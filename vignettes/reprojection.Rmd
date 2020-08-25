@@ -232,20 +232,57 @@ ggplot(anthromes_dgg_shp) +
 ```{r}
 library(nomclust)
 
-time_steps_ordered <- c("10000BC", "9000BC", "8000BC", "7000BC", "6000BC", "5000BC", "4000BC", "3000BC", "2000BC", "1000BC", "0AD", "100AD", "200AD", "300AD", "400AD", "500AD", "600AD", "700AD", "800AD", "900AD", "1000AD", "1100AD", "1200AD", "1300AD", "1400AD", "1500AD", "1600AD",  "1700AD",  "1710AD",  "1720AD",  "1730AD",  "1740AD",  "1750AD",  "1760AD", "1770AD", "1780AD", "1790AD", "1800AD", "1810AD", "1820AD", "1830AD", "1840AD", "1850AD", "1860AD", "1870AD", "1880AD", "1890AD", "1900AD", "1910AD", "1920AD", "1930AD", "1940AD", "1950AD", "1960AD", "1970AD", "1980AD", "1990AD", "2000AD", "2012AD", "2013AD", "2014AD", "2015AD", "2016AD", "2017AD")
 
- recent_time_steps <-  c("2012AD",  "2013AD",  "2014AD",  "2015AD",  "2016AD",  "2017AD")
- 
 set.seed(1000)
-clusters <- anthromes_dgg %>%
-  slice_sample(prop = 0.1) %>% 
+cluster_samp <- anthromes_dgg %>%
+  slice_sample(prop = 0.02, weight_by = dgg_land$land_area) %>% 
   pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  filter(!(time_step %in% recent_time_steps)) %>%
-  dplyr::arrange(id, time_step) %>%
+    dplyr::arrange(id, time_step)
+
+
+clusters_millennia <- cluster_samp %>%
+  filter(!(time_step %in% recent_time_steps),
+         time_step %in% time_steps_millennia) %>%
   pivot_wider(names_from = time_step, values_from = anthrome) %>%
   select(-id) %>%
-  nomclust(prox = FALSE)
+  nomclust(prox = FALSE, measure = 've')
+  
+clusters_centuries <- cluster_samp %>%
+  filter(!(time_step %in% recent_time_steps),
+         time_step %in% time_steps_centuries) %>%
+  pivot_wider(names_from = time_step, values_from = anthrome) %>%
+  select(-id) %>%
+  nomclust(prox = FALSE, measure = 've')
+
+clusters_decades <- cluster_samp %>%
+  filter(!(time_step %in% recent_time_steps),
+         time_step %in% time_steps_decades) %>%
+  pivot_wider(names_from = time_step, values_from = anthrome) %>%
+  select(-id) %>%
+  nomclust(prox = FALSE, measure = 've')
+
+hist(clusters$mem$clu_6)
+dgg_land$land_area
+
+cluster_samp %>%
+  mutate(cluster = clusters$mem$clu_6) %>%
+  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
+                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
+  ggplot(aes(time_step, anthrome, group = id, color = as.factor(cluster))) +
+  geom_line(alpha = .5, size = 1.2) +
+  facet_wrap(~cluster) +
+  theme_classic()
+```
+
+```{r}
+cluster_samp %>%
+  mutate(cluster = clusters$mem$clu_6) %>%
+  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
+                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
+  group_by(cluster, time_step) %>%
+  dplyr::summarise(anthrome = modal(anthrome)) %>%
+  left_join(anthrome_key, by = c('anthrome' = 'value'))
 ```
 
 ```{r}
@@ -301,4 +338,35 @@ an12_dgg <- read_csv('anthromes_dgg.csv') %>%
 
 write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
 write_csv(an12_dgg, 'an12_dgg.csv')
+```
+
+
+
+# DGG from analysis script
+```{r}
+# construct the DGG
+dggs <- dgconstruct(res=12)
+
+#save the DGG
+dgearthgrid(dggs, frame = TRUE, wrapcells = FALSE, savegrid =  "./l12_ISEA3H_dgg.shp")
+
+dgg <- dgconstruct(res = 12) %>%
+  dgearthgrid(frame = TRUE, wrapcells = FALSE, savegrid = 'dgg_l12.shp')
+
+
+grid <- dgconstruct(res = 7) %>%
+  dgearthgrid(frame = FALSE, wrapcells = FALSE) %>%
+  st_as_sf() %>%
+  mutate(id = 1:n()) %>%
+  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30")) %>%
+  .[land_mask, ]
+
+ #%>% st_set_crs('+proj=isea')
+plot(grid)
+```
+
+```{r}
+dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
+
+dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
 ```

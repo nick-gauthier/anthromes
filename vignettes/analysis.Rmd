@@ -65,7 +65,7 @@ time_steps_ordered <- factor(time_steps, levels = time_steps, ordered = TRUE)
 recent_time_steps <-  c("2012AD",  "2013AD",  "2014AD",  "2015AD",  "2016AD",  "2017AD")
  
  time_steps_millennia <- c("10000BC", "9000BC", "8000BC", "7000BC", "6000BC", "5000BC", "4000BC", "3000BC", "2000BC", "1000BC", "0AD", "1000AD", "2000AD")
- 
+ # should 2010 be included as the present or not?
  time_steps_centuries <- c("0AD", "100AD", "200AD", "300AD", "400AD", "500AD", "600AD", "700AD", "800AD", "900AD", "1000AD", "1100AD", "1200AD", "1300AD", "1400AD", "1500AD", "1600AD",  "1700AD",  "1800AD",  "1900AD", "2000AD", "2010AD")
  
  time_steps_decades <- c("1700AD", "1710AD",  "1720AD",  "1730AD",  "1740AD",  "1750AD",  "1760AD", "1770AD", "1780AD", "1790AD", "1800AD", "1810AD", "1820AD", "1830AD", "1840AD", "1850AD", "1860AD", "1870AD", "1880AD", "1890AD", "1900AD", "1910AD", "1920AD", "1930AD", "1940AD", "1950AD", "1960AD", "1970AD", "1980AD", "1990AD", "2000AD", "2010AD")
@@ -314,6 +314,10 @@ onsets <- bind_rows(select(an12_dgg_inputs, id) %>% left_join(onset_seminatural)
   st_set_crs(4326)
 ```
 
+```{r}
+write_sf(onsets, 'anthromes_onsets.csv')
+```
+
 
 ```{r fig.width = 10, fig.height=12}
 onsets %>%
@@ -322,93 +326,71 @@ ggplot() +
   geom_sf(aes(fill = onset, geometry = geometry), color = NA)+
   scale_fill_viridis_c(option = 'A', na.value = 'lightgrey', direction = 1, trans = 'pseudo_log') +
   facet_wrap(~type, nrow = 2)  +
-  theme_bw()
-```
-
-DGG
-```{r}
-# construct the DGG
-dggs <- dgconstruct(res=12)
-
-#save the DGG
-dgearthgrid(dggs, frame = TRUE, wrapcells = FALSE, savegrid =  "./l12_ISEA3H_dgg.shp")
-
-dgg <- dgconstruct(res = 12) %>%
-  dgearthgrid(frame = TRUE, wrapcells = FALSE, savegrid = 'dgg_l12.shp')
-
-
-grid <- dgconstruct(res = 7) %>%
-  dgearthgrid(frame = FALSE, wrapcells = FALSE) %>%
-  st_as_sf() %>%
-  mutate(id = 1:n()) %>%
-  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30")) %>%
-  .[land_mask, ]
-
- #%>% st_set_crs('+proj=isea')
-plot(grid)
-```
-
-```{r}
-dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
-
-dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
+  theme_bw() +
+    coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
 # Regression
 
+import contemporary data
 ```{r}
-test_dat <- an12_dgg %>%
+contemp_vars <- read_sf('contemp_vars.shp')
+```
+
+
+```{r}
+regression_dat <- an12_dgg %>%
   pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
   left_join(anthrome_key) %>%
   dplyr::select(-anthrome, -level, -type) %>%
-  pivot_wider(names_from = time, values_from = class) %>%
-  mutate(hfp_max = hfp_dgg$max) %>%
-  filter(!is.na(hfp_max)) # shouldn't have to do this last step!
+  pivot_wider(names_from = time, values_from = class) %>% # use the 5-category anthrome classes
+  left_join(contemp_vars, by = 'id') %>%
+  na.omit # shouldn't have to do this last step!
 
-mod1 <-
-mille
-AIC(mod1)
-
-calc_aic <- function(predictor){
-  as.f
- 
+calc_aic <- function(predictand, predictor){
+  as.formula(paste(predictand, '~', predictor)) %>%
+    lm(data = regression_dat) %>% 
+    AIC
 }
 
-test_aic <- c(`10000BC`, `9000BC`, `8000BC`, `7000BC`, `6000BC`, `5000BC`, `4000BC`, `3000BC`, `2000BC`, `1000BC`, `0AD`, `1000AD`, `2000AD`) %>%
-  map_dbl(calc_aic)
+test_aic <- expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('mean', 'max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic)) %>%
+  left_join(time_key)
 
-
-c(lm(hfp_max ~ `2000AD`, data = test_dat) %>% AIC,
-    lm(hfp_max ~ `1900AD`, data = test_dat) %>% AIC,
-      lm(hfp_max ~ `1800AD`, data = test_dat) %>% AIC,
-        lm(hfp_max ~ `1700AD`, data = test_dat) %>% AIC,
-          lm(hfp_max ~ `1600AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `1500AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `1400AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `1300AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `1200AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `1100AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `1000AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `900AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `800AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `700AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `600AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `500AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `400AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `300AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `200AD`, data = test_dat) %>% AIC,
-           lm(hfp_max ~ `100AD`, data = test_dat) %>% AIC,
-  lm(hfp_max ~ `0AD`, data = test_dat) %>% AIC,
-             lm(hfp_max ~ `5000BC`, data = test_dat) %>% AIC,
-  lm(hfp_max ~ `10000BC`, data = test_dat) %>% AIC) %>% plot
+test_aic %>%
+  #filter(predictands == 'v_thr') %>%
+  group_by(predictands) %>%
+  mutate(delta = aic - min(aic),
+       weight = MuMIn::Weights(aic)) %>%
+  ggplot(aes(year, delta, color = predictands)) +
+  geom_point()
 ```
+
+
+
+```{r}
+hist(as.numeric(contemp_vars$nmh))
+hist(contemp_vars$ind_cnt)
+hist(contemp_vars$pa_km2)
+hist(contemp_vars$mean)
+hist(contemp_vars$max)
+hist(contemp_vars$v_rich)
+hist(contemp_vars$v_thr)
+
+```
+
+so
+
 
 ```{r}
 library(glmnet)
-test_mat <- test_dat %>%
-  dplyr::select(`10000BC`:`2000AD`) %>%
+regression_mat <- regression_dat %>%
+  dplyr::select(any_of(time_steps_centuries)) %>%
   data.matrix()
-test_mod <- cv.glmnet(test_mat, pull(test_dat, hfp_max), family = 'gaussian', standardize = FALSE)
+# this doesn't treat the predictand as a factor
+test_mod <- cv.glmnet(regression_mat, pull(regression_dat, hfp_max), family = 'gaussian', standardize = FALSE)
 test_mod
 plot(test_mod)
 
