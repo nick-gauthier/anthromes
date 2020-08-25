@@ -296,8 +296,9 @@ suppressWarnings(
     filter(anthrome < 61) %>%
     left_join(time_key) %>%
   summarise(onset = min(year))
+)
 
-
+suppressWarnings(
   onset_used <- an12_dgg %>%
     pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
   group_by(id) %>%
@@ -306,8 +307,8 @@ suppressWarnings(
   summarise(onset = min(year))
 )
 
-onsets <- bind_rows(select(an12_dgg_inputs, id) %>% left_join(onset_seminatural), 
-                    select(an12_dgg_inputs, id) %>% left_join(onset_used), .id = 'type') %>%
+onsets <- bind_rows(dplyr::select(an12_dgg_inputs, id) %>% left_join(onset_seminatural), 
+                    dplyr::select(an12_dgg_inputs, id) %>% left_join(onset_used), .id = 'type') %>%
  mutate(type = if_else(type == 1, 'Onset of Seminatural Anthromes', 'Onset of Used Anthromes')) %>%
   left_join(time_key, by = c('onset' = 'year')) %>%
   st_as_sf() %>%
@@ -315,7 +316,11 @@ onsets <- bind_rows(select(an12_dgg_inputs, id) %>% left_join(onset_seminatural)
 ```
 
 ```{r}
-write_sf(onsets, 'anthromes_onsets.csv')
+onsets %>%
+  dplyr::select(-time_step) %>%
+  spread(type, onset) %>%
+  write_sf('anthromes_onsets_wide.shp')
+write_sf(onsets, 'anthromes_onsets.shp')
 ```
 
 
@@ -330,13 +335,125 @@ ggplot() +
     coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
-# Regression
+#Contemporary Data
 
 import contemporary data
 ```{r}
-contemp_vars <- read_sf('contemp_vars.shp')
+verts <- read_csv('../three_conditions_v4_rep_data.csv') %>%
+  select(l1_id, v_thr, v_rich, food_cal)
 ```
 
+```{r}
+contemp_vars <- read_sf('contemp_vars.shp') %>%
+  select(-v_rich, -v_thr) %>%
+  left_join(verts, by = c('L1_ID' = 'l1_id'))
+```
+
+
+
+
+```{r}
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 40, xmax = 70, ymin = 20, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = food_cal), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
+
+
+```{r}
+contemp <- an12_dgg %>%
+  select(id, `2000AD`) %>% # should be most recent time step?
+  left_join(contemp_vars, by = 'id') %>%
+  left_join(anthrome_key, by = c('2000AD' = 'anthrome'))
+contemp
+```
+
+
+```{r}
+a <- contemp %>%
+  mutate(total_pa = sum(pa_km2, na.rm = TRUE),
+          total_ind = sum(ind_cnt, na.rm = TRUE),
+          total_land = sum(land_area, na.rm = TRUE)) %>%
+  group_by(level) %>%
+  summarise(protected = sum(pa_km2, na.rm = TRUE),
+            indigenous = sum(ind_cnt, na.rm = TRUE),
+            all_land = sum(land_area, na.rm = TRUE)) %>%
+  gather(variable, value, protected:all_land) %>%
+  ggplot(aes(x = variable, y = value, fill = level)) +
+  geom_col(position = 'fill') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  coord_flip() +
+  labs(y = 'Percent area') +
+  theme_minimal()
+```
+
+```{r}
+b <- contemp %>%
+  group_by(landsuit, level) %>%
+  count(wt = land_area) %>%
+  filter(!is.na(landsuit)) %>%
+  ggplot(aes(landsuit, n, fill = level)) +
+  geom_col(position = 'fill') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
+  coord_flip() +
+      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(y = 'Percent area', x = 'Suitability for rainfed agriculture') +
+  theme_minimal()
+```
+
+```{r}
+c <- contemp %>%
+  group_by(nmh, level) %>%
+  count(wt = land_area) %>%
+  filter(!is.na(nmh)) %>%
+  ggplot(aes(nmh, n, fill = level)) +
+  geom_col(position = 'fill') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
+  coord_flip() +
+       scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(y = 'Percent area', x = 'Natural and Modified Habitat') +
+  theme_minimal()
+```
+
+```{r}
+d <- contemp %>%
+  group_by(X.3_cond_v4, level) %>%
+  count(wt = land_area) %>%
+  filter(!is.na(X.3_cond_v4)) %>%
+  ggplot(aes(X.3_cond_v4, n, fill = level)) +
+  geom_col(position = 'fill') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
+  coord_flip() +
+       scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+    labs(y = 'Percent area', x = 'Three Global Conditions') +
+  theme_minimal()
+```
+
+
+```{r, fig.width = 10, fig.height=5}
+contemp %>%
+  select(id, level, max, mean, food_cal, v_thr, v_rich) %>%
+  rename(hfp_max = max, hfp_mean = mean) %>%
+  gather(key, value, hfp_max:v_rich) %>%
+  ggplot(aes(level, value, fill = level)) +
+    geom_boxplot() +
+  facet_wrap(~key, scales = 'free_y') +
+  theme_bw() +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level')
+```
+
+
+```{r, fig.width=10, fig.height = 6}
+library(patchwork)
+
+a+ b + c+d + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+```
+
+
+# Regression
 
 ```{r}
 regression_dat <- an12_dgg %>%
