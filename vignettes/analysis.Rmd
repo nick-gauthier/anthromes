@@ -353,11 +353,18 @@ contemp_vars <- read_sf('contemp_vars.shp') %>%
 
 
 ```{r}
+
 contemp_vars %>%
 st_crop(st_bbox(c(xmin = 40, xmax = 70, ymin = 20, ymax = 40))) %>% # comment out for whole world
   ggplot() +
-  geom_sf(aes(fill = food_cal), color = NA) +
-  scale_fill_viridis_c() +
+  geom_sf(aes(fill = (0.2 >= pa_km2 & pa_km2 > 0)), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 40, xmax = 70, ymin = 20, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pa_km2 > 0.2), color = NA) +
+  scale_fill_viridis_d() +
   coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
@@ -455,12 +462,13 @@ a+ b + c+d + plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
 # Regression
 
+Anthrome levels
 ```{r}
 regression_dat <- an12_dgg %>%
   pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
   left_join(anthrome_key) %>%
-  dplyr::select(-anthrome, -level, -type) %>%
-  pivot_wider(names_from = time, values_from = class) %>% # use the 5-category anthrome classes
+  dplyr::select(-anthrome, -class, -type) %>%
+  pivot_wider(names_from = time, values_from = level) %>% # use the 5-category anthrome levels
   left_join(contemp_vars, by = 'id') %>%
   na.omit # shouldn't have to do this last step!
 
@@ -477,14 +485,172 @@ test_aic <- expand_grid(time_step = time_steps_centuries[-22],
   left_join(time_key)
 
 test_aic %>%
-  #filter(predictands == 'v_thr') %>%
   group_by(predictands) %>%
-  mutate(delta = aic - min(aic),
-       weight = MuMIn::Weights(aic)) %>%
-  ggplot(aes(year, delta, color = predictands)) +
-  geom_point()
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed() +
+  theme_minimal()
+  
+# check out some regressions
+lm(v_rich ~ `1900AD`, data = regression_dat) %>% summary
+lm(v_rich ~ `2000AD`, data = regression_dat) %>% summary
+
+lm(max ~ `1900AD`, data = regression_dat) %>% summary
+lm(max ~ `2000AD`, data = regression_dat) %>% summary
+
 ```
 
+
+```{r}
+regression_dat2 <- regression_dat %>%
+  mutate(pa = pa_km2 > 0, ind = ind_cnt > 0)
+
+calc_aic2 <- function(predictand, predictor){
+  as.formula(paste(predictand, '~', predictor)) %>%
+    glm(family = binomial, data = regression_dat2) %>% 
+    AIC
+}
+
+test_aic2 <- expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('pa', 'ind')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
+  left_join(time_key)
+
+test_aic2 %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(year, predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed(ratio = 100) +
+  theme_minimal()
+
+glm(pa ~ `2000AD`, family = binomial, data = regression_dat2) %>% plot
+```
+
+
+```{r}
+expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('pa', 'ind')) %>%
+  mutate(predictors = paste0('`', time_step, '`'))
+
+mod <- as.formula(paste('pa', '~', '`0AD`')) %>%
+    glm(family = binomial, data = regression_dat2)
+
+AIC(mod)
+mod2 <- glm(famil)
+summary(mod)
+```
+
+
+```{r}
+library(nnet)
+
+multinom
+mult <- multinom(`2000AD` ~ `2000AD`, data = regression_dat)
+# does this nodata warning mean its looking for the unused factor level? maybe drop it
+
+summary(mult)
+
+
+
+calc_aic3 <- function(predictand, predictor){
+  as.formula(paste(predictand, '~', predictor)) %>%
+    multinom(data = regression_dat) %>% 
+    AIC
+}
+
+test_aic3 <- expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('`2000AD`', 'X.3_cond_v4', 'nmh', 'landsuit')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic3)) %>%
+  left_join(time_key)
+
+test_aic3 %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(year, predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed(ratio = 100) +
+  theme_minimal()
+```
+
+
+
+```{r}
+bind_rows(test_aic, test_aic2)%>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(year, predictands, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+    coord_fixed(ratio = 100) +
+  theme_minimal()
+```
+
+now anthromes classes
+```{r}
+regression_dat <- an12_dgg %>%
+  pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
+  left_join(anthrome_key) %>%
+  dplyr::select(-anthrome, -level, -type) %>%
+  pivot_wider(names_from = time, values_from = class) %>% # use the 5-category anthrome levels
+  left_join(contemp_vars, by = 'id') %>%
+  mutate(pa = pa_km2 > 0, ind = ind_cnt > 0) %>%
+  na.omit # shouldn't have to do this last step!
+
+test_aic_class <- expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('mean', 'max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic)) %>%
+  left_join(time_key)
+
+
+
+test_aic_class2 <- expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('pa', 'ind')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
+  left_join(time_key)
+
+test_aic_class3 <- expand_grid(time_step = time_steps_centuries[-22],
+                   predictands = c('X.3_cond_v4', 'nmh', 'landsuit')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic3)) %>%
+  left_join(time_key)
+
+
+test_aic_class2 %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(year, predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed(ratio = 100) +
+  theme_minimal()
+
+test_aic_class %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed() +
+  theme_minimal()
+
+test_aic_class3 %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(year, predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed(ratio = 100) +
+  theme_minimal()
+```
 
 
 ```{r}
