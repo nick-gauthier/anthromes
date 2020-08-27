@@ -17,11 +17,7 @@ library(tidyverse)
 
 
 ```{r}
-crops <- raster('data/raw_data/hyde_output/cropland2000AD.asc')
 land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc')
-
-crop_prop <- crops / land_area
-land_frac <- land_area / area(land_area)
 ```
 
 ```{r}
@@ -35,75 +31,6 @@ dgg_land <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp') %>%
 write_sf(dgg_land, 'l12_ISEA3H_dgg_land.shp')
 ```
 
-
-```{r}
-#cellStats(land_area, 'sum', na.rm = TRUE)
-```
-
-
-
-```{r}
-test <- brick(crops, land_area) %>%
-  exact_extract(dgg, 'sum')
-```
-
-
-```{r]}
-dat <- dgg %>%
-  mutate(crops_sum = exact_extract(crops, ., 'sum'),
-         crop_prop = exact_extract(crop_prop, ., 'mean'),
-         land_area = exact_extract(land_area, ., 'sum'),
-         land_frac = exact_extract(land_frac, ., 'mean'))
-```
-
-```{r}
-```
-
-```{r}
-dat2 <- st_drop_geometry(dat) %>%
-  filter(land_area> 0)
-```
-
-
-```{r}
-ggplot(dat) +
-  geom_sf(aes(fill = crops), color = NA)
-```
-
-```{r}
-crops_real <- as.data.frame(crops, na.rm = TRUE) %>%
-  pull(cropland2000AD) %>%
-  sum
-
-t2 <- as.data.frame(land_area, na.rm = TRUE) %>%
-  pull(maxln_cr) %>%
-  sum
-```
-
-```{r}
-dat2 %>%
-  summarise(crops_sum = sum(crops_sum, na.rm = TRUE),
-            crops_mean1 = sum(crop_prop * land_area, na.rm = TRUE),
-            crops_mean2 = sum(crop_prop * H_AREA_K_1 * land_frac, na.rm = TRUE)) %>%
-  mutate_all(~(crops_real-.)/crops_real * 100)
-```
-
-```{r}
-test3 <- exact_extract(crops, dgg, 'weighted_mean', weights=land_area)
-```
-
-
-
-
-```{r}
-crop_prop_1km <- disaggregate(crops, 10)
-```
-
-```{r, warning=FALSE}
-dgg_rast <- fasterize(dgg, crop_prop_1km, field = 'L1_ID')
-
-dgg_rast_dat <- as.data.frame(brick(dgg_rast, crop_prop_1km), xy = TRUE, na.rm = TRUE)
-```
 
 ## all files
 ```{r}
@@ -227,62 +154,6 @@ write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
 ```{r}
 ggplot(anthromes_dgg_shp) +
   geom_sf(aes(fill = as.factor(`1200AD`)), color = NA)
-```
-
-```{r}
-library(nomclust)
-
-
-set.seed(1000)
-cluster_samp <- anthromes_dgg %>%
-  slice_sample(prop = 0.02, weight_by = dgg_land$land_area) %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-    dplyr::arrange(id, time_step)
-
-
-clusters_millennia <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_millennia) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  select(-id) %>%
-  nomclust(prox = FALSE, measure = 've')
-  
-clusters_centuries <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_centuries) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  select(-id) %>%
-  nomclust(prox = FALSE, measure = 've')
-
-clusters_decades <- cluster_samp %>%
-  filter(!(time_step %in% recent_time_steps),
-         time_step %in% time_steps_decades) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome) %>%
-  select(-id) %>%
-  nomclust(prox = FALSE, measure = 've')
-
-hist(clusters$mem$clu_6)
-dgg_land$land_area
-
-cluster_samp %>%
-  mutate(cluster = clusters$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  ggplot(aes(time_step, anthrome, group = id, color = as.factor(cluster))) +
-  geom_line(alpha = .5, size = 1.2) +
-  facet_wrap(~cluster) +
-  theme_classic()
-```
-
-```{r}
-cluster_samp %>%
-  mutate(cluster = clusters$mem$clu_6) %>%
-  pivot_longer(-c(id, cluster), names_to = 'time_step', values_to = 'anthrome') %>%
-                   dplyr::mutate(time_step = factor(time_step, levels = time_steps_ordered)) %>%
-  group_by(cluster, time_step) %>%
-  dplyr::summarise(anthrome = modal(anthrome)) %>%
-  left_join(anthrome_key, by = c('anthrome' = 'value'))
 ```
 
 ```{r}
