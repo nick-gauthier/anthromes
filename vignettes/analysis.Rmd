@@ -467,9 +467,10 @@ Anthrome levels
 regression_dat <- an12_dgg %>%
   pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
   left_join(anthrome_key) %>%
-  dplyr::select(-anthrome, -class, -type) %>%
-  pivot_wider(names_from = time, values_from = level) %>% # use the 5-category anthrome levels
+  dplyr::select(-anthrome, -level, -type) %>%
+  pivot_wider(names_from = time, values_from = class) %>% # use the 5-category anthrome levels
   left_join(contemp_vars, by = 'id') %>%
+  mutate(pa = pa_km2 > 0, ind = ind_cnt > 0, cond3 = as.factor(X.3_cond_v4)) %>%
   na.omit # shouldn't have to do this last step!
 
 calc_aic <- function(predictand, predictor){
@@ -504,12 +505,9 @@ lm(max ~ `2000AD`, data = regression_dat) %>% summary
 
 
 ```{r}
-regression_dat2 <- regression_dat %>%
-  mutate(pa = pa_km2 > 0, ind = ind_cnt > 0)
-
 calc_aic2 <- function(predictand, predictor){
   as.formula(paste(predictand, '~', predictor)) %>%
-    glm(family = binomial, data = regression_dat2) %>% 
+    glm(family = binomial, data = regression_dat) %>% 
     AIC
 }
 
@@ -592,24 +590,13 @@ bind_rows(test_aic, test_aic2)%>%
   theme_minimal()
 ```
 
-now anthromes classes
+## anthromes classes
 ```{r}
-regression_dat <- an12_dgg %>%
-  pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
-  left_join(anthrome_key) %>%
-  dplyr::select(-anthrome, -level, -type) %>%
-  pivot_wider(names_from = time, values_from = class) %>% # use the 5-category anthrome levels
-  left_join(contemp_vars, by = 'id') %>%
-  mutate(pa = pa_km2 > 0, ind = ind_cnt > 0) %>%
-  na.omit # shouldn't have to do this last step!
-
 test_aic_class <- expand_grid(time_step = time_steps_centuries[-22],
-                   predictands = c('mean', 'max', 'v_thr', 'v_rich')) %>%
+                   predictands = c('mean', 'max', 'v_thr', 'v_rich', 'food_cal')) %>%
   mutate(predictors = paste0('`', time_step, '`'),
          aic = map2_dbl(predictands, predictors, calc_aic)) %>%
   left_join(time_key)
-
-
 
 test_aic_class2 <- expand_grid(time_step = time_steps_centuries[-22],
                    predictands = c('pa', 'ind')) %>%
@@ -618,11 +605,22 @@ test_aic_class2 <- expand_grid(time_step = time_steps_centuries[-22],
   left_join(time_key)
 
 test_aic_class3 <- expand_grid(time_step = time_steps_centuries[-22],
-                   predictands = c('X.3_cond_v4', 'nmh', 'landsuit')) %>%
+                   predictands = c('cond3', 'nmh', 'landsuit')) %>%
   mutate(predictors = paste0('`', time_step, '`'),
          aic = map2_dbl(predictands, predictors, calc_aic3)) %>%
   left_join(time_key)
 
+
+
+test_aic_class %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic),
+         delta = aic / min(aic) * 100) %>%
+  ggplot(aes(as.factor(year), predictands, fill = aic_scaled)) +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1) +
+  coord_fixed() +
+  theme_minimal()
 
 test_aic_class2 %>%
   group_by(predictands) %>%
@@ -633,23 +631,75 @@ test_aic_class2 %>%
   coord_fixed(ratio = 100) +
   theme_minimal()
 
-test_aic_class %>%
+bind_rows(test_aic_class, test_aic_class2, test_aic_class3)%>%
   group_by(predictands) %>%
   mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(as.factor(year), predictands, fill = aic_scaled)) +
+  ggplot(aes(as.factor(year), predictands, fill = aic_scaled), color = 'white') +
   geom_tile() +
   scale_fill_viridis_c(direction = -1) +
-  coord_fixed() +
-  theme_minimal()
+  theme_classic() +
+  scale_x_discrete(breaks = c(1, 500, 1000, 1500, 2000),
+                   labels = c('1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  coord_fixed()
 
-test_aic_class3 %>%
-  group_by(predictands) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(year, predictands, fill = aic_scaled)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_fixed(ratio = 100) +
-  theme_minimal()
+ggsave('anthrome_legacies.png', height = 3, width = 6)
+```
+
+
+```{r}
+m1 <- glm(pa_km2 > 0 ~ `2000AD`, family = binomial, data = regression_dat)
+m2 <- glm(pa_km2 > 0 ~ `600AD`, family = binomial, data = regression_dat)
+m3 <- glm(pa_km2 > 1 ~ `2000AD`, family = binomial, data = regression_dat)
+m4 <- glm(pa_km2 > 1 ~ `600AD`, family = binomial, data = regression_dat)
+AIC(m1, m2);AIC(m3, m4)
+
+t1 <- regression_dat %>%
+  modelr::add_predictions(m1, var = 'pred2000', type = 'response') %>%
+    modelr::add_predictions(m2, var = 'pred600', type = 'response')
+
+
+t1 %>% select(pred2000, pred600, geometry) %>%
+  st_as_sf %>%
+  st_crop(st_bbox(c(xmin = 0, xmax = 60, ymin = 20, ymax = 60))) %>% # comment out for whole world
+  gather(key, value, pred2000:pred600) %>%
+  ggplot()+
+  geom_sf(aes(fill = value), color = NA) +
+  facet_wrap(~key) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+
+summary(m2);summary(m1)
+```
+
+```{r}
+t1 %>% st_as_sf %>%
+  st_crop(st_bbox(c(xmin = 0, xmax = 60, ymin = 20, ymax = 60))) %>% # comment out for whole world
+  ggplot()+
+  geom_sf(aes(fill = pa_km2), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+t1 %>% st_as_sf %>%
+  st_crop(st_bbox(c(xmin = 0, xmax = 60, ymin = 20, ymax = 60))) %>% # comment out for whole world
+  ggplot()+
+  geom_sf(aes(fill = pa_km2 >0), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+t1 %>% st_as_sf %>%
+  st_crop(st_bbox(c(xmin = 0, xmax = 60, ymin = 20, ymax = 60))) %>% # comment out for whole world
+  ggplot()+
+  geom_sf(aes(fill = pa_km2 >10), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+t1 %>% st_as_sf %>%
+  st_crop(st_bbox(c(xmin = 0, xmax = 30, ymin = 40, ymax = 60))) %>% # comment out for whole world
+  ggplot()+
+  geom_sf(aes(fill = ind_cnt), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
 
@@ -661,6 +711,7 @@ hist(contemp_vars$mean)
 hist(contemp_vars$max)
 hist(contemp_vars$v_rich)
 hist(contemp_vars$v_thr)
+hist(log(contemp_vars$food_cal))
 
 ```
 
