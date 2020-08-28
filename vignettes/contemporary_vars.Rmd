@@ -1,0 +1,276 @@
+---
+title: "Contemporary Variables"
+author: "Nick Gauthier"
+date: "8/24/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(raster)
+library(exactextractr)
+library(tidyverse)
+library(sf)
+```
+
+Processing contemporary variables for comparison to Anthromes data
+
+Import anthromes dgg data
+```{r}
+an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')  %>% st_set_crs(4326)
+an12_dgg <- read_csv('an12_dgg.csv')
+```
+
+
+```{r}
+hfp <- raster('data/raw_data/hfp2000_merisINT.tif') # this is mollweide
+landsuit <- raster('../comb_low/w001001.adf')
+landsuit[landsuit <= -900] <- NA # get rid of null values
+nmh <- raster('../WCMC_natural_modified_habitat_screening_layer/natural_modified_habitat_screening_layer.tif')
+pop2017 <- raster('~/Downloads/HYDE/hyde32_output/2017AD_pop.zip/popc_2017AD.asc')
+```
+
+```{r}
+plot(hfp);plot(landsuit);plot(nmh)
+plot(is.na(landsuit))
+```
+
+
+```{r}
+# the hfp data are mollweide, so convert the dgg first for that
+dgg_mollweide <- an12_dgg_inputs %>%
+  st_transform(st_crs(hfp))
+```
+
+```{r}
+nmh_extract <- exact_extract(nmh, an12_dgg_inputs, fun = 'mode')
+landsuit_extract <- exact_extract(landsuit, an12_dgg_inputs, fun = 'mode')
+hfp_extract <- exact_extract(hfp, dgg_mollweide, fun = c('max', 'mean'))
+pop2017_extract <- exact_extract(pop2017, an12_dgg_inputs, fun = 'sum')
+```
+
+
+```{r}
+plot(as.factor(nmh))
+
+plot(nmh == 4)
+
+nmh2 <- exact_extract(nmh, an12_dgg_inputs, function(value, frac) {
+  tapply(frac, value, sum) / sum(frac)
+})
+nmh2
+exact_extract(nmh == 4, an12_dgg_inputs, fun = 'mode')
+bind_rows(nmh2)
+```
+
+
+```{r}
+nmh34 <- clamp(nmh, lower = 3, upper = 4, useValues = FALSE)
+nmh4 <- clamp(nmh, lower = 4, upper = 4, useValues = FALSE)
+
+nmh_mask <- brick(nmh34, nmh4)
+
+nmh_count <- exact_extract(nmh, an12_dgg_inputs, function(value, frac) {
+  tapply(frac, value, sum) / sum(frac)
+})
+
+
+nmh1
+t1 <- nmh %>% crop(extent(c(10,20,30,40)))
+
+t1[t1 != 4] <- NA
+plot()
+
+length(nmh_count2)
+exact_extract(t1, an12_dgg_inputs, fun = 'count')  
+
+
+nmh_count[[1]]%>% dim
+
+nmh_tibble<- nmh_count %>% 
+  map(~{if(length(.) > 0})
+  map(~{if(length(.) == 0) c(`1` = NA, `2` = NA, `3` = NA, `4` = NA) else .}) %>% 
+  map_dfr(as.list) %>%
+      replace_na(list(`1` = 0, `2` = 0, `3` = 0, `4` = 0)) %>% # turn na's into zeros
+            transmute(nmh_4 = `4`, nmh_34 = `3` + `4`)
+```
+
+
+```{r}
+dgg <- an12_dgg_inputs %>%
+  bind_cols(hfp_extract) %>%
+  mutate(nmh = as.factor(nmh_extract),
+         landsuit = as.factor(landsuit_extract),
+         pop17 = pop2017_extract)
+```
+
+```{r}
+ggplot(dgg) +
+  geom_sf(aes(fill = nmh), color = NA) +
+  scale_fill_viridis_d()
+
+ggplot(dgg) +
+  geom_sf(aes(fill = max), color = NA) +
+  scale_fill_viridis_c()
+
+ggplot(dgg) +
+  geom_sf(aes(fill = mean), color = NA) +
+  scale_fill_viridis_c()
+
+ggplot(dgg) +
+  geom_sf(aes(fill = landsuit), color = NA) +
+  scale_fill_viridis_d()
+```
+
+```{r}
+id_key <- read_sf('../an12_dgg_cells.shp') %>%
+  filter(DGG_status == 3) %>% dplyr::select(L1_ID, ANL12_ID) %>%
+  st_drop_geometry()
+
+tgc <- read_csv('../three_conditions_v4_rep_data.csv') %>% 
+  select(l1_id, `@3_cond_v4`, hfp_max, pa_km2, kba_km2, food_cal, ind_cnt, v_rich, v_thr) %>%
+  mutate(food_cal = food_cal / 1e6)
+```
+
+
+```{r}
+contemp_vars <- dgg %>%
+  select(-pot_veg, -pot_vill)  %>%
+  left_join(id_key, by = c('id' = 'ANL12_ID')) %>% 
+  left_join(tgc, by = c('L1_ID' = 'l1_id')) 
+```
+
+```{r}
+#how many null cells for different data?
+sum(is.na(contemp_vars$landsuit))
+sum(is.na(contemp_vars$hfp_max))
+```
+
+
+```{r}
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = hfp_max), color = NA) +
+  scale_fill_viridis_c() +
+  ggtitle('Human footprint (max)') +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = max), color = NA) +
+  scale_fill_viridis_c() +
+  ggtitle('Human footprint (max)') +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = mean), color = NA) +
+  scale_fill_viridis_c() +
+  ggtitle('Human footprint (mean)') +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = v_thr), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = v_rich), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 10, xmax = 40, ymin = 30, ymax = 50))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = kba_km2), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 10, xmax = 40, ymin = 30, ymax = 50))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = food_cal), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
+
+
+```{r}
+sum(tgc$l1_id %in% contemp_vars$L1_ID)
+sum(contemp_vars$L1_ID %in% tgc$l1_id)
+```
+
+1,434,246 -> tgc
+1,429,024 -> reduced grid
+1,424,807 -> overlap
+
+
+```{r}
+write_sf(contemp_vars, 'contemp_vars.shp')
+
+contemp_vars <- read_sf('contemp_vars.shp')
+
+bind_cols(contemp_vars, nmh_tibble) %>% 
+  write_sf('contemp_vars.shp')
+
+
+bind_cols(contemp_vars, nmh_tibble) %>%
+  st_crop(st_bbox(c(xmin = 10, xmax = 40, ymin = 30, ymax = 50))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = nmh_4), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
+
+
+## Olson biomes
+
+
+```{r}
+biome_summary <- an12_dgg %>% 
+  left_join(st_drop_geometry(  dplyr::select(contemp_vars,ANL12_ID, biome)), by = c('id' = 'ANL12_ID')) %>%
+  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+  select(-pot_vill, -pot_veg) %>%
+  pivot_longer(-c(id, land_area, biome), names_to = 'time_step', values_to = 'anthrome') %>%
+    mutate(anthrome= as.factor(anthrome), pot_veg = as.factor(biome)) %>%
+  count(time_step, anthrome, pot_veg, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+  mutate(percent_land_area = land_area / total_land_area,
+                  anthrome = as.numeric(as.character(anthrome)),
+         pot_veg = as.numeric(as.character(pot_veg))) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  filter(year <= 2000) %>% # this should be redundant
+  arrange(year, pot_veg, anthrome) %>%
+  #mutate(pot_veg = case_when(pot_veg == 1 ~ 'Tropical Evergreen Woodland',
+  #                           pot_veg == 2 ~ 'Tropical Deciduous Woodland',
+  #                           pot_veg %in% c(3,4,5) ))
+  #  left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
+  select(time_step, pot_veg, anthrome, class, percent_land_area, period, year)
+
+#write_csv(biome_summary, 'an12_dgg_summary_biomes.csv')
+```
+
+
+```{r}
+biome_summary %>%
+ # mutate(pretty_biomes = str_wrap(biomes)) %>%
+ ggplot(aes(as.factor(year), percent_land_area)) +
+  geom_col(aes(fill = class), color = 'lightgrey', size = .1)+ 
+ #facet_grid(biome~period, scales = 'free', space = 'free') +
+   facet_grid(pot_veg~period, scales = 'free', space = 'free_x') +
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+      theme_classic() +
+    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = expression('Percent land surface'))
+
+ggsave('anthromes_summary_forested_biomes.png', height = 12, width = 11)
+```
+
