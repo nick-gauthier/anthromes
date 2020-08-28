@@ -9,7 +9,7 @@ url_general <- 'ftp://ftp.pbl.nl/hyde/hyde3.2/general_files/'
 destination <- '~/Downloads/HYDE/hyde32_output/'
 
 hyde_names <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
-recent_years <- str_c(paste0(2001:2017, 'AD'), collapse = '|')
+recent_years <- str_c(paste0(c(2001:2009,2011:2016), 'AD'), collapse = '|') # include 2010 and 2011 but not other recent years
 
 getURL(url_hyde, dirlistonly = TRUE) %>%
   strsplit('\n') %>%
