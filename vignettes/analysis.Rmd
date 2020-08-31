@@ -101,6 +101,9 @@ an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')  %>% st_set_crs(4326)
 an12_dgg <- read_csv('an12_dgg.csv')
 
 total_land_area <- sum(an12_dgg_inputs$land_area)
+
+contemp_vars <- read_sf('contemp_vars.shp') %>%
+   mutate(pa = pa_km2 > 0, ind = ind_cnt > 0, kba = kba_km2 > 0, pa50 = pa_km2 > 50, ind50 = ind_cnt > 50, kba50 = kba_km2 > 50, v_rich = round(v_rich), v_thr = round(v_thr), hfp_max = round(hfp_max)) # won't make a difference, but this should technically be > 50% area, rather than just 50, but here the scales even out
 ```
 
 
@@ -338,32 +341,6 @@ ggplot() +
 
 #Contemporary Data
 
-import contemporary data
-
-```{r}
-contemp_vars <- read_sf('contemp_vars.shp') 
-```
-
-
-
-
-```{r}
-contemp_vars %>%
-st_crop(st_bbox(c(xmin = 40, xmax = 70, ymin = 20, ymax = 40))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = (0.2 >= pa_km2 & pa_km2 > 0)), color = NA) +
-  scale_fill_viridis_d() +
-  coord_sf(crs = st_crs("+proj=eck4"))
-contemp_vars %>%
-st_crop(st_bbox(c(xmin = 40, xmax = 70, ymin = 20, ymax = 40))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = v_rich), color = NA) +
-  scale_fill_viridis_c() +
-  coord_sf(crs = st_crs("+proj=eck4"))
-```
-
-
-
 
 
 ```{r}
@@ -371,7 +348,6 @@ contemp <- an12_dgg %>%
   select(id, `2017AD`) %>% # should be most recent time step?
   left_join(contemp_vars, by = 'id') %>%
   left_join(anthrome_key, by = c('2017AD' = 'anthrome'))
-contemp
 ```
 
 
@@ -382,9 +358,8 @@ a <- contemp %>%
   group_by(level) %>%
   summarise(protected = sum(pa_km2, na.rm = TRUE),
             key_bio = sum(kba_km2, na.rm = TRUE),
-            food_cal = sum(food_cal, na.rm = TRUE),
             indigenous = sum(ind_cnt, na.rm = TRUE),
-            all_land = sum(land_area, na.rm = TRUE)) %>%
+            all_land = sum(land_ar, na.rm = TRUE)) %>%
   gather(variable, value, protected:all_land) %>%
   ggplot(aes(x = variable, y = value, fill = level)) +
   geom_col(position = 'fill') +
@@ -394,21 +369,21 @@ a <- contemp %>%
   labs(y = 'Percent total in each anthrome') +
   theme_minimal()
 
-b <- contemp %>%
-  group_by(landsuit, level) %>%
-  count(wt = land_area) %>%
-  filter(!is.na(landsuit)) %>%
-  ggplot(aes(landsuit, n, fill = level)) +
-  geom_col(position = 'fill') +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
-  coord_flip() +
-      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(y = 'Percent area in each anthrome', x = 'Suitability for rainfed agriculture') +
-  theme_minimal()
+#b <- contemp %>%
+#  group_by(landsuit, level) %>%
+#  count(wt = land_ar) %>%
+#  filter(!is.na(landsuit)) %>%
+#  ggplot(aes(landsuit, n, fill = level)) +
+#  geom_col(position = 'fill') +
+#  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
+#  coord_flip() +
+#      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+#    labs(y = 'Percent area in each anthrome', x = 'Suitability for rainfed agriculture') +
+#  theme_minimal()
 
 c <- contemp %>%
   group_by(nmh, level) %>%
-  count(wt = land_area) %>%
+  count(wt = land_ar) %>%
   filter(!is.na(nmh)) %>%
   ggplot(aes(nmh, n, fill = level)) +
   geom_col(position = 'fill') +
@@ -419,10 +394,10 @@ c <- contemp %>%
   theme_minimal()
 
 d <- contemp %>%
-  group_by(X.3_cond_v4, level) %>%
-  count(wt = land_area) %>%
-  filter(!is.na(X.3_cond_v4)) %>%
-  ggplot(aes(X.3_cond_v4, n, fill = level)) +
+  group_by(X_3_c_4, level) %>%
+  count(wt = land_ar) %>%
+  filter(!is.na(X_3_c_4)) %>%
+  ggplot(aes(X_3_c_4, n, fill = level)) +
   geom_col(position = 'fill') +
   scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
   coord_flip() +
@@ -430,7 +405,7 @@ d <- contemp %>%
     labs(y = 'Percent area in each anthrome', x = 'Three Global Conditions') +
   theme_minimal()
 
-a+ b + c+d + plot_layout(guides = "collect") & theme(legend.position = "bottom")
+a + c+d + plot_layout(guides = "collect") & theme(legend.position = "bottom")
 
 ggsave('contemp_summary_levels.png', width = 10,height = 6)
 ```
@@ -498,16 +473,70 @@ ggsave('contemp_summary_class.png', width = 10,height = 7)
 
 ```{r, fig.width = 10, fig.height=5}
 contemp %>%
-  select(id, level, max, v_thr, v_rich) %>%
-  rename(hfp_max = max, hfp_mean = mean) %>%
+  select(id, level, hfp_max, v_thr, v_rich) %>%
   gather(key, value, hfp_max:v_rich) %>%
   ggplot(aes(level, value, fill = level)) +
-    geom_boxplot() +
-  facet_wrap(~key, scales = 'free_y') +
+    geom_boxplot(outlier.size = .5, outlier.alpha = .5) +
+  facet_wrap(~key, scales = 'free_x') +
   theme_bw() +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level')
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
+  coord_flip()
 ```
 
+## maps
+
+
+```{r}
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = 40, xmax = 70, ymin = 20, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = (0.2 >= pa_km2 & pa_km2 > 0)), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = ind_cnt), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = ind_cnt>50), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = ind_cnt>0), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
+```{r}
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pa_km2), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pa_km2>50), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+contemp_vars %>%
+st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pa_km2>0), color = NA) +
+  scale_fill_viridis_d() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
 
 
 # Regression
@@ -515,24 +544,14 @@ contemp %>%
 Anthrome levels
 ```{r}
 library(nnet)
-
-regression_dat <- an12_dgg %>%
-  pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
-  left_join(anthrome_key) %>%
-  dplyr::select(-anthrome, -level, -type) %>%
-  pivot_wider(names_from = time, values_from = class) %>% # use the 5-category anthrome levels
-  left_join(contemp_vars, by = 'id') %>%
-  mutate(pa = pa_km2 > 0, ind = ind_cnt > 0, kba = kba_km2 > 0, cond3 = as.factor(X.3_cond_v4), v_rich = round(v_rich), v_thr = round(v_thr)) %>%
-  na.omit # shouldn't have to do this last step!
-
 calc_aic <- function(predictand, predictor){
   as.formula(paste(predictand, '~', predictor)) %>%
-    lm(data = regression_dat) %>% 
+    glm(family = poisson(), data = reg_dat34) %>% 
     AIC
 }
 calc_aic2 <- function(predictand, predictor){
   as.formula(paste(predictand, '~', predictor)) %>%
-    glm(family = binomial, data = regression_dat) %>% 
+    glm(family = binomial, data = reg_dat34) %>% 
     AIC
 }
 calc_aic3 <- function(predictand, predictor){
@@ -540,7 +559,137 @@ calc_aic3 <- function(predictand, predictor){
     multinom(data = regression_dat) %>% 
     AIC
 }
+```
 
+```{r}
+regression_dat <- an12_dgg %>%
+  pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
+  left_join(anthrome_key) %>%
+  dplyr::select(-anthrome, -level, -type) %>%
+  pivot_wider(names_from = time, values_from = class) %>%
+  left_join(contemp_vars, by = 'id') %>%
+  na.omit # shouldn't have to do this last step!
+
+reg_dat34 <- regression_dat %>% filter(nmh_34 > 0.5)
+reg_dat4 <- regression_dat %>% filter(nmh_4 > 0.5)
+
+
+test_aic_class <- expand_grid(time_step = time_steps_centuries,
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic)) %>%
+  left_join(time_key)
+
+test_aic_class2 <- expand_grid(time_step = time_steps_centuries,
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
+  left_join(time_key)
+
+test_aic_class3 <- expand_grid(time_step = time_steps_centuries,
+                   predictands = c('kba', 'ind', 'pa')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
+  left_join(time_key)
+
+test_aic_class3 <- expand_grid(time_step = time_steps_centuries,
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
+  left_join(time_key)
+
+#test_aic_class3 <- expand_grid(time_step = time_steps_centuries,
+#                   predictands = c('`2017AD`')) %>%
+#  mutate(predictors = paste0('`', time_step, '`'),
+#         aic = map2_dbl(predictands, predictors, calc_aic3)) %>%
+#  left_join(time_key)
+
+preds_order <- bind_rows(test_aic_class, test_aic_class2) %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  filter(aic_scaled == min(aic_scaled)) %>%
+  arrange(year) %>%
+  pull(predictands)
+  
+bind_rows(test_aic_class, test_aic_class2) %>%
+  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50', 'hfp_max', 'pa50',  'ind50')))) %>%
+  group_by(vars) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_x_discrete(breaks = c(1, 500, 1000, 1500, 2000),
+                   labels = c('1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL, subtitle = 'Predicted Variable')+
+  coord_fixed() +
+ theme(plot.subtitle = element_text(hjust = -.4))
+
+ggsave('anthrome_legacies34.png', height = 3, width = 6)
+```
+
+```{r}
+bind_rows(test_aic_class, test_aic_class2) %>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(year, aic)) +
+  geom_line() +
+  geom_point() +
+  facet_wrap(~predictands, scales = 'free_y') +
+  theme_minimal()
+```
+
+
+
+```{r}
+bllep <- expand_grid(time_step = time_steps_centuries,
+                   predictands = c('kba', 'ind', 'pa')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         gof = map2_dbl(predictands, predictors, glemp)) %>%
+  left_join(time_key)
+glemp <- function(predictand, predictor){
+  mod <- as.formula(paste(predictand, '~', predictor)) %>%
+    glm(family = binomial, data = regression_dat)
+  
+    with(summary(mod), 1 - deviance/null.deviance)
+}
+
+
+bllep%>%
+  group_by(predictands) %>%
+  mutate(aic_scaled = scales::rescale(aic),
+         aic_test = aic / min(aic)) %>%
+  ggplot(aes(as.factor(year), predictands, fill = aic), color = 'white') +
+  geom_tile() +
+  scale_fill_viridis_c(direction = 1) +
+  theme_classic() +
+  scale_x_discrete(breaks = c(1, 500, 1000, 1500, 2000),
+                   labels = c('1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  coord_fixed()
+```
+
+
+
+```{r}
+hist(contemp_vars$ind_cnt)
+hist(contemp_vars$pa_km2)
+hist(contemp_vars$kba_km2)
+hist(contemp_vars$max)
+hist(contemp_vars$v_rich)
+hist(contemp_vars$v_thr)
+hist(contemp_vars$nmh_34)
+hist(contemp_vars$nmh_4)
+```
+```{r}
+sum(contemp_vars$nmh_4 == 1)
+sum(contemp_vars$nmh_34 == 1);sum(contemp_vars$nmh_34 > .99)
+
+```
+
+
+
+```{r}
 # check out some regressions
 m1 <- glm(v_thr ~ `1500AD`, family = poisson, data = regression_dat)
 with(summary(m1), 1 - deviance/null.deviance)
@@ -553,115 +702,6 @@ lm(max ~ `2000AD`, data = regression_dat) %>% summary
 
 ```
 
-
-```{r}
-
-
-test_aic2 <- expand_grid(time_step = time_steps_centuries[-22],
-                   predictands = c('pa', 'ind')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
-  left_join(time_key)
-
-test_aic2 %>%
-  group_by(predictands) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(year, predictands, fill = aic_scaled)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_fixed(ratio = 100) +
-  theme_minimal()
-
-glm(pa ~ `2000AD`, family = binomial, data = regression_dat2) %>% plot
-```
-
-
-```{r}
-expand_grid(time_step = time_steps_centuries[-22],
-                   predictands = c('pa', 'ind')) %>%
-  mutate(predictors = paste0('`', time_step, '`'))
-
-mod <- as.formula(paste('pa', '~', '`0AD`')) %>%
-    glm(family = binomial, data = regression_dat2)
-
-AIC(mod)
-mod2 <- glm(famil)
-summary(mod)
-```
-
-
-```{r}
-mult <- multinom(`2000AD` ~ `2000AD`, data = regression_dat)
-# does this nodata warning mean its looking for the unused factor level? maybe drop it
-
-summary(mult)
-
-
-
-
-
-test_aic3 <- expand_grid(time_step = time_steps_centuries[-22],
-                   predictands = c('`2000AD`', 'X.3_cond_v4', 'nmh', 'landsuit')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic3)) %>%
-  left_join(time_key)
-
-test_aic3 %>%
-  group_by(predictands) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(year, predictands, fill = aic_scaled)) +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  coord_fixed(ratio = 100) +
-  theme_minimal()
-```
-
-
-
-```{r}
-bind_rows(test_aic, test_aic2)%>%
-  group_by(predictands) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(year, predictands, fill = aic_scaled), color = 'white') +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-    coord_fixed(ratio = 100) +
-  theme_minimal()
-```
-
-## anthromes classes
-```{r}
-test_aic_class <- expand_grid(time_step = time_steps_centuries,
-                   predictands = c('hfp_max', 'v_thr', 'v_rich', 'food_cal')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic)) %>%
-  left_join(time_key)
-
-test_aic_class2 <- expand_grid(time_step = time_steps_centuries,
-                   predictands = c('pa', 'ind', 'kba')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
-  left_join(time_key)
-
-test_aic_class3 <- expand_grid(time_step = time_steps_centuries,
-                   predictands = c('`2017AD`', 'cond3', 'nmh', 'landsuit')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic3)) %>%
-  left_join(time_key)
-
-bind_rows(test_aic_class, test_aic_class2, test_aic_class3)%>%
-  group_by(predictands) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(as.factor(year), predictands, fill = aic_scaled), color = 'white') +
-  geom_tile() +
-  scale_fill_viridis_c(direction = -1) +
-  theme_classic() +
-  scale_x_discrete(breaks = c(1, 500, 1000, 1500, 2000),
-                   labels = c('1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
-  coord_fixed()
-
-ggsave('anthrome_legacies.png', height = 3, width = 6)
-```
 
 
 ```{r}
@@ -721,28 +761,12 @@ t1 %>% st_as_sf %>%
 ```
 
 
-```{r}
-hist(as.numeric(contemp_vars$nmh))
-hist(contemp_vars$ind_cnt)
-hist(contemp_vars$pa_km2)
-hist(contemp_vars$mean)
-hist(contemp_vars$max)
-hist(contemp_vars$v_rich)
-hist(contemp_vars$v_thr)
-hist(log(contemp_vars$food_cal))
-
-```
-
-so
-
 
 ```{r}
 library(glmnet)
-regression_mat <- regression_dat %>%
-  dplyr::select(any_of(time_steps_centuries)) %>%
-  data.matrix()
+regression_mat <-  model.matrix(~ .-1,  dplyr::select(regression_dat, any_of(time_steps_centuries)))
 # this doesn't treat the predictand as a factor
-test_mod <- cv.glmnet(regression_mat, pull(regression_dat, hfp_max), family = 'gaussian', standardize = FALSE)
+test_mod <- cv.glmnet(regression_mat, pull(regression_dat, kba50), family = 'binomial', intercept = FALSE, standardize = FALSE)
 test_mod
 plot(test_mod)
 
