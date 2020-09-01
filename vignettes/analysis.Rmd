@@ -11,6 +11,8 @@ library(stars)
 library(tidyverse)
 library(sf)
 library(dggridR)
+library(patchwork)
+
 
 anthrome_key <- tibble(
   anthrome = c(11, 12, 21, 22, 23, 24, 31, 32, 33, 34, 41, 42, 43, 51, 
@@ -122,7 +124,7 @@ anthromes_summary <- an12_dgg %>%
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in% seq(1710, 2000, 10) ~ 'Decades'),
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
   filter(year <= 2000) %>% # this should be redundant
   arrange(year, anthrome) %>%
@@ -341,8 +343,6 @@ ggplot() +
 
 #Contemporary Data
 
-
-
 ```{r}
 contemp <- an12_dgg %>%
   select(id, `2017AD`) %>% # should be most recent time step?
@@ -350,25 +350,58 @@ contemp <- an12_dgg %>%
   left_join(anthrome_key, by = c('2017AD' = 'anthrome'))
 ```
 
-
-```{r fig.width=10, fig.height = 6}
-library(patchwork)
-
-a <- contemp %>%
+```{r}
+a <- bind_rows(contemp %>%
+  group_by(nmh, level) %>%
+  count(wt = land_ar) %>%
+  filter(!is.na(nmh)) %>%
+  mutate(var = case_when(nmh == 1 ~ 'Likely Modified',
+                         nmh == 2 ~ 'Potential Modified',
+                         nmh == 3 ~ 'Potential Natural',
+                         nmh == 4 ~ 'Likely Natural')),
+  contemp %>%
+  group_by(X_3_c_4, level) %>%
+  count(wt = land_ar) %>%
+  filter(!is.na(X_3_c_4)) %>%
+  mutate(var = case_when(X_3_c_4 == 1 ~ 'Cities and Farms',
+                                      X_3_c_4 == 2 ~ 'Shared Lands',
+                                      X_3_c_4 == 3 ~ 'Large Wild Areas')), 
+  contemp %>%
   group_by(level) %>%
-  summarise(protected = sum(pa_km2, na.rm = TRUE),
-            key_bio = sum(kba_km2, na.rm = TRUE),
-            indigenous = sum(ind_cnt, na.rm = TRUE),
-            all_land = sum(land_ar, na.rm = TRUE)) %>%
-  gather(variable, value, protected:all_land) %>%
-  ggplot(aes(x = variable, y = value, fill = level)) +
+  summarise(`Key Biodiversity Areas` = sum(kba_km2, na.rm = TRUE),
+            `Indigenous Lands` = sum(ind_cnt, na.rm = TRUE),
+            `Protected Lands` = sum(pa_km2, na.rm = TRUE),
+            `All Lands` = sum(land_ar, na.rm = TRUE)) %>%
+  gather(var, n, `Key Biodiversity Areas` :`All Lands`), .id = 'type') %>%
+  mutate(type = factor(if_else(type == 1, 'Natural and Modified Habitats', if_else(type == 2, 'Three Global Conditions', 'Other Variables')), levels = c('Three Global Conditions', 'Natural and Modified Habitats', 'Other Variables')),
+         var = factor(var, levels =  rev(c('Likely Natural', 'Potential Natural', 'Potential Modified', 'Likely Modified', 'Large Wild Areas', 'Shared Lands', 'Cities and Farms', 'All Lands',  'Indigenous Lands', 'Protected Lands', 'Key Biodiversity Areas')))) %>%
+  ggplot(aes(var, n, fill = level)) +
   geom_col(position = 'fill') +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
-    scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  scale_fill_manual(values = anthrome_level_color, name = NULL) +
+       scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+  facet_wrap(~type, ncol = 1, scales = 'free_y') +
+    labs(y = 'Percent total in each anthrome level', x = NULL) +
   coord_flip() +
-  labs(y = 'Percent total in each anthrome') +
-  theme_minimal()
+  theme_classic() +
+    theme( axis.line.y = element_blank(),  axis.ticks.y = element_blank(), panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(), strip.background = element_blank())
+  
+a
+```
 
+
+```{r}
+b <- contemp %>%
+  select(id, level, hfp_max, v_thr, v_rich) %>%
+  gather(key, value, hfp_max:v_rich) %>%
+  mutate(key = if_else(key == 'hfp_max', 'Human Footprint (max)', if_else(key == 'v_rich', 'Vertebrate Species Richness', 'Threatened Vertebrate Species Richness'))) %>%
+  ggplot(aes(level, value, fill = level)) +
+  geom_boxplot(outlier.size = .1, outlier.alpha = .05, lwd = .3) +
+  facet_wrap(~key, scales = 'free_x', ncol = 1) +
+  theme_classic() +
+  scale_fill_manual(values = anthrome_level_color, name = NULL) +
+  labs( x = NULL, y = 'Distribution across anthrome levels') +
+  theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(), strip.background = element_blank(), axis.text.y = element_blank(), legend.position = 'none', panel.grid.minor = element_blank(), panel.grid.major.y = element_blank())  +
+  coord_flip()
 #b <- contemp %>%
 #  group_by(landsuit, level) %>%
 #  count(wt = land_ar) %>%
@@ -380,36 +413,16 @@ a <- contemp %>%
 #      scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
 #    labs(y = 'Percent area in each anthrome', x = 'Suitability for rainfed agriculture') +
 #  theme_minimal()
-
-c <- contemp %>%
-  group_by(nmh, level) %>%
-  count(wt = land_ar) %>%
-  filter(!is.na(nmh)) %>%
-  ggplot(aes(nmh, n, fill = level)) +
-  geom_col(position = 'fill') +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
-  coord_flip() +
-       scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(y = 'Percent area in each anthrome', x = 'Natural and Modified Habitat') +
-  theme_minimal()
-
-d <- contemp %>%
-  group_by(X_3_c_4, level) %>%
-  count(wt = land_ar) %>%
-  filter(!is.na(X_3_c_4)) %>%
-  ggplot(aes(X_3_c_4, n, fill = level)) +
-  geom_col(position = 'fill') +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
-  coord_flip() +
-       scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
-    labs(y = 'Percent area in each anthrome', x = 'Three Global Conditions') +
-  theme_minimal()
-
-a + c+d + plot_layout(guides = "collect") & theme(legend.position = "bottom")
-
-ggsave('contemp_summary_levels.png', width = 10,height = 6)
 ```
 
+
+```{r, fig.width = 10, fig.asp = 2/3}
+((a | b ) + plot_layout(guides = 'collect')) / e  + plot_layout(heights = c(2, 1)) + plot_annotation(tag_levels = 'A')
+
+ggsave('contemp_summary_levels.png', width = 10,height = 10 * 2/3)
+```
+
+### anthrome classes
 ```{r fig.width=10, fig.height = 6}
 e <- contemp %>%
   group_by(class) %>%
@@ -471,17 +484,6 @@ e+ f + g+h + plot_layout(guides = "collect") & theme(legend.position = "bottom")
 ggsave('contemp_summary_class.png', width = 10,height = 7)
 ```
 
-```{r, fig.width = 10, fig.height=5}
-contemp %>%
-  select(id, level, hfp_max, v_thr, v_rich) %>%
-  gather(key, value, hfp_max:v_rich) %>%
-  ggplot(aes(level, value, fill = level)) +
-    geom_boxplot(outlier.size = .5, outlier.alpha = .5) +
-  facet_wrap(~key, scales = 'free_x') +
-  theme_bw() +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome level') +
-  coord_flip()
-```
 
 ## maps
 
@@ -611,7 +613,7 @@ preds_order <- bind_rows(test_aic_class, test_aic_class2) %>%
   arrange(year) %>%
   pull(predictands)
   
-bind_rows(test_aic_class, test_aic_class2) %>%
+e <- bind_rows(test_aic_class, test_aic_class2) %>%
   mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50', 'hfp_max', 'pa50',  'ind50')))) %>%
   group_by(vars) %>%
   mutate(aic_scaled = scales::rescale(aic)) %>%
@@ -622,11 +624,9 @@ bind_rows(test_aic_class, test_aic_class2) %>%
   scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
   scale_x_discrete(breaks = c(1, 500, 1000, 1500, 2000),
                    labels = c('1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
-  labs(x = 'Predictor Year', y = NULL, subtitle = 'Predicted Variable')+
-  coord_fixed() +
- theme(plot.subtitle = element_text(hjust = -.4))
-
-ggsave('anthrome_legacies34.png', height = 3, width = 6)
+  labs(x = 'Predictor Year', y = NULL)
+e
+ggsave(e, 'anthrome_legacies34.png', height = 3, width = 6)
 ```
 
 ```{r}
