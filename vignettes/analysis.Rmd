@@ -188,7 +188,7 @@ addSmallLegend <- function(myPlot, pointSize = 3, textSize = 8, spaceLegend = .8
 }
 
 a <- addSmallLegend(a)
-ggsave(a, 'anthrome_areas_population.png', width = 9, height = 3.5)
+ggsave('anthrome_areas_population.png', width = 9, height = 3.5)
 ```
 
 
@@ -292,7 +292,7 @@ write_csv(biome_summary, 'an12_dgg_summary_biomes.csv')
 ```
 
 
-```{r, fig.height = 8, fig.width = 8}
+```{r, fig.height = 12, fig.width = 10}
 # there are still horizontal lines from the combined biomes ... or something else
 biome_summary %>%
   filter(biome != 'Ice, snow') %>%
@@ -306,9 +306,9 @@ biome_summary %>%
     scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
-  labs(x = 'Year', y = expression('Percent land surface')) + theme(legend.position = 'none')
+  labs(x = 'Year', y = expression('Percent land surface')) + theme(legend.position = 'right')
 
-ggsave('anthromes_summary_forested_biomes.png', height = 12, width = 11)
+ggsave('anthromes_summary_biomes.png', height = 12, width = 10)
 ```
 
 # Onsets
@@ -368,6 +368,105 @@ contemp <- an12_dgg %>%
   left_join(contemp_vars, by = 'id') %>%
   left_join(anthrome_key, by = c('2017AD' = 'anthrome'))
 ```
+
+```{r}
+kba_summary <- contemp_vars %>%
+  select(id, kba_km2) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, kba_km2), names_to = 'time_step', values_to = 'anthrome') %>%
+  mutate(anthrome= as.factor(anthrome)) %>%
+  count(time_step, anthrome, wt = kba_km2, name = 'var', .drop = FALSE) %>% 
+  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  arrange(year, anthrome) %>%
+  select(time_step, anthrome, class, var, period, year)
+
+pa_summary <- contemp_vars %>%
+  select(id, pa_km2) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, pa_km2), names_to = 'time_step', values_to = 'anthrome') %>%
+  mutate(anthrome= as.factor(anthrome)) %>%
+  count(time_step, anthrome, wt = pa_km2, name = 'var', .drop = FALSE) %>% 
+  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  arrange(year, anthrome) %>%
+  select(time_step, anthrome, class, var, period, year)
+
+nmh4_summary <- contemp_vars %>%
+  select(id, nmh_4) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, nmh_4), names_to = 'time_step', values_to = 'anthrome') %>%
+  mutate(anthrome= as.factor(anthrome)) %>%
+  count(time_step, anthrome, wt = nmh_4, name = 'var', .drop = FALSE) %>% 
+  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  arrange(year, anthrome) %>%
+  select(time_step, anthrome, class, var, period, year)
+
+nmh34_summary <- contemp_vars %>%
+  select(id, nmh_34) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, nmh_34), names_to = 'time_step', values_to = 'anthrome') %>%
+  mutate(anthrome= as.factor(anthrome)) %>%
+  count(time_step, anthrome, wt = nmh_34, name = 'var', .drop = FALSE) %>% 
+  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
+  left_join(anthrome_key, by = 'anthrome') %>%
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  arrange(year, anthrome) %>%
+  select(time_step, anthrome, class, var, period, year)
+```
+
+Summary by total land area.
+
+```{r, fig.width=10, fig.height=10}
+bind_rows(kba_summary,pa_summary, nmh34_summary, nmh4_summary, .id = 'type') %>%
+  mutate(type = case_when(type == 1 ~ 'KBA',
+                          type == 2 ~ 'PA',
+                          type == 3 ~ 'NMH 3+4',
+                          type == 4 ~ 'NMH 4')) %>%
+ ggplot(aes(as.factor(year), var)) +
+#  geom_area(aes(fill = class, color = class), position = 'stack') +
+#  geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
+  geom_col(position = 'fill', aes(fill = class, color = class), size = 1)+
+  geom_hline(yintercept = c(.25, .50, .75), linetype = 2, alpha = .3) +
+ facet_grid(type~period, scales = 'free', space = 'free_x') +
+  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+      theme_classic() +
+  scale_y_continuous(labels = scales::percent, expand = c(0,0.02)) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land surface') +
+  theme(legend.position = 'bottom', plot.margin = margin(.2, .2,.2, r = .5, unit = 'cm'))
+
+
+ggsave('anthrome_areas_conservatino.png', width = 10, height = 10)
+```
+
+
 
 ```{r}
 a <- bind_rows(contemp %>%
