@@ -96,7 +96,7 @@ biome_key <- tibble(biome_value = 1:15) %>%
                                          biome_value == 14 ~ 'Desert and barren',
                                          biome_value == 15 ~ 'Ice, snow'),
          # define levels so plots have correct order
-         biome = factor(biome, levels = c('Tropical evergreen woodland', 'Tropical deciduous woodland', 'Temperate woodland', 'Boreal woodland', 'Mixed woodland', 'Grassland, savanna, steppe',	'Tundra',	'Desert and barren', 'Ice, snow')))
+         biome = factor(biome, levels = c('Tropical evergreen woodland', 'Tropical deciduous woodland', 'Temperate woodland', 'Boreal woodland', 'Mixed woodland', 'Grassland, savanna, steppe', 'Shrubland', 'Tundra',	'Desert and barren', 'Ice, snow')))
 ```
 
 # Setup
