@@ -31,11 +31,17 @@ anthrome_key <- tibble(
             'Residential woodlands', 'Populated woodlands', 'Remote woodlands', 
             'Inhabited treeless & barren lands', 'Wild woodlands', 
             'Wild treeless and barren lands', 'Ice, uninhabited', 'NODATA')),
-  level = factor(c('Dense settlements', 'Dense settlements', 'Villages', 'Villages', 
-            'Villages', 'Villages', 'Croplands', 'Croplands', 'Croplands', 'Croplands', 
+  # level = factor(c('Dense settlements', 'Dense settlements', 'Villages', 'Villages', 
+  #           'Villages', 'Villages', 'Croplands', 'Croplands', 'Croplands', 'Croplands', 
+  #           'Rangelands', 'Rangelands', 'Rangelands', 'Seminatural', 'Seminatural', 
+  #           'Seminatural', 'Seminatural', 'Wildlands', 'Wildlands', 'Wildlands', 'NODATA'), 
+  #           levels = c('Dense settlements', 'Villages', 'Croplands',
+  #           'Rangelands', 'Seminatural', 'Wildlands', 'NODATA')),
+    level = factor(c('Settlements', 'Settlements', 'Settlements', 'Settlements', 
+            'Settlements', 'Settlements', 'Croplands', 'Croplands', 'Croplands', 'Croplands', 
             'Rangelands', 'Rangelands', 'Rangelands', 'Seminatural', 'Seminatural', 
             'Seminatural', 'Seminatural', 'Wildlands', 'Wildlands', 'Wildlands', 'NODATA'), 
-            levels = c('Dense settlements', 'Villages', 'Croplands',
+            levels = c('Settlements', 'Croplands',
             'Rangelands', 'Seminatural', 'Wildlands', 'NODATA')),
   type = factor(c('Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 
            'Used', 'Used', 'Used', 'Used', 'Seminatural', 'Seminatural','Seminatural', 
@@ -48,7 +54,10 @@ anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6',
                   '#D3FFB2', '#B2B2B2', '#DAF2EA', '#E1E1E1', '#FAFFFF', NA) %>%
   setNames(anthrome_key$class)
 
-anthrome_level_color <- c('Dense settlements' = '#CD6666', 'Villages' = '#AA66CD', 'Croplands' = '#FFFF00', 
+#anthrome_level_color <- c('Dense settlements' = '#CD6666', 'Villages' = '#AA66CD', 'Croplands' = '#FFFF00', 
+#                 'Rangelands' = '#FFAA00', 'Seminatural' = '#D3FFBE', 'Wildlands' = '#38A800', NODATA = NA)
+
+anthrome_level_color <- c('Settlements' = '#CD6666', 'Croplands' = '#FFFF00', 
                  'Rangelands' = '#FFAA00', 'Seminatural' = '#D3FFBE', 'Wildlands' = '#38A800', NODATA = NA)
 
 anthrome_type_color <- c('Used' = '#EDCDCB', 'Seminatural' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
@@ -197,53 +206,93 @@ regions_dgg <- raster::raster('../simple_regions.tif') %>%
   exact_extract(an12_dgg_inputs, 'mode')
 
 region_key <- tibble(region = 1:8, region_name = c('Eurasia', 'Latin America', 'Near East', 'Africa', 'Asia', 'Europe', 'North America', 'Oceania'))
-
-
-#left_join(an12_dgg_inputs,   mutate(an12_dgg, region = regions_dgg, land_area = an12_dgg_inputs$land_area)) %>%      left_join(region_key) %>%
- # ggplot() +
-#  geom_sf(aes(fill = region_name), color = NA)
 ```
 
 ```{r}
+contemp_vars %>%
+  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
+  select(id, nmh3_km2) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, nmh3_km2), names_to = 'time_step', values_to = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, nmh3_km2, level) %>%
+  count(time_step, level, wt = nmh3_km2, name = 'var', .drop = FALSE) %>% 
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  select(time_step, level, var, period, year)
+
+# region_summary <- an12_dgg %>% 
+#   mutate(region = regions_dgg, land_area = an12_dgg_inputs$land_area) %>%
+#   pivot_longer(-c(id, land_area, region), names_to = 'time_step', values_to = 'anthrome') %>%
+#   mutate(anthrome= as.factor(anthrome), region = as.factor(region)) %>%
+#   count(time_step, anthrome, region, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+#   mutate(percent_land_area = land_area / total_land_area,
+#                   anthrome = as.numeric(as.character(anthrome)),
+#          region = as.numeric(as.character(region))) %>%
+#   left_join(anthrome_key, by = 'anthrome') %>%
+#   left_join(time_key, by = 'time_step') %>%
+#   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+#                             year %in% seq(100, 1700, 100) ~ 'Centuries',
+#                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+#          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+#   arrange(year, region, anthrome) %>%
+#     left_join(region_key) %>%
+#   select(time_step, region_name, anthrome, class, percent_land_area, period, year)
+
 region_summary <- an12_dgg %>% 
   mutate(region = regions_dgg, land_area = an12_dgg_inputs$land_area) %>%
   pivot_longer(-c(id, land_area, region), names_to = 'time_step', values_to = 'anthrome') %>%
-    mutate(anthrome= as.factor(anthrome), region = as.factor(region)) %>%
-  count(time_step, anthrome, region, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+  left_join(anthrome_key, by = 'anthrome') %>% 
+  select(time_step, region, land_area, level) %>%
+  mutate(region = as.factor(region)) %>%
+  count(time_step, level, region, wt = land_area, name = 'land_area', .drop = FALSE) %>%
   mutate(percent_land_area = land_area / total_land_area,
-                  anthrome = as.numeric(as.character(anthrome)),
          region = as.numeric(as.character(region))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, region, anthrome) %>%
     left_join(region_key) %>%
-  select(time_step, region_name, anthrome, class, percent_land_area, period, year)
+  select(time_step, region_name, level, percent_land_area, period, year)
 
 write_csv(region_summary, 'an12_dgg_summary_region.csv')
 ```
 
 
-```{r, fig.height = 9, fig.width = 8}
+```{r}
+# region_summary %>% 
+#  ggplot(aes(as.factor(year), percent_land_area)) +
+#   geom_col(aes(fill = class, color = class), size = 1)+ 
+#    facet_grid(region_name~period, scales = 'free', space = 'free_x') +
+#   scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+#   scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+#       theme_classic() +
+#   scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = c(0,0)) +
+#   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+#                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+#   labs(x = 'Year', y = expression('Percent land surface')) +
+#   theme(legend.position = 'none')
+#   theme(axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1), legend.position = 'bottom')
 
-b <- region_summary %>% 
+region_summary %>% 
  ggplot(aes(as.factor(year), percent_land_area)) +
-  geom_col(aes(fill = class, color = class), size = 1)+ 
-   facet_grid(region_name~period, scales = 'free', space = 'free_x') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-      theme_classic() +
-  scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = c(0,0)) +
+  geom_col(aes(fill = level, color = level))+ 
+   facet_grid(region_name~period, scales = 'free', space = 'free_x', switch = 'y') +
+  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome') +
+      theme_bw() +
+  #scale_y_continuous(labels = scales::percent_format(accuracy = 1), expand = c(0,0)) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
-  labs(x = 'Year', y = expression('Percent land surface')) +
-  theme(legend.position = 'none')
-  #theme(axis.text.x = element_text(angle = 45, vjust = 0.9, hjust=1), legend.position = 'bottom')
-  
-b
+  labs(x = 'Year', y = NULL) +
+  theme(legend.position = 'none', strip.background.y = element_blank(), strip.text.y.left = element_text(angle = 0, hjust = 1), axis.line.y.left = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank())
+
+
 theme(legend.position = 'bottom', plot.margin = margin(.2, .2,.2, r = .5, unit = 'cm'))
 ggsave('anthromes_summary_region.png', height = 9, width = 8)
 ```
@@ -268,47 +317,97 @@ map_dat <-  an12_dgg_inputs %>%
 
 ## Biome summary
 ```{r}
+# biome_summary <- an12_dgg %>% 
+#   left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+#   select(-pot_vill) %>%
+#   pivot_longer(-c(id, land_area, pot_veg), names_to = 'time_step', values_to = 'anthrome') %>%
+#     mutate(anthrome= as.factor(anthrome), pot_veg = as.factor(pot_veg)) %>%
+#   count(time_step, anthrome, pot_veg, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+#   mutate(percent_land_area = land_area / total_land_area,
+#                   anthrome = as.numeric(as.character(anthrome)),
+#          pot_veg = as.numeric(as.character(pot_veg))) %>%
+#   left_join(anthrome_key, by = 'anthrome') %>%
+#   left_join(time_key, by = 'time_step') %>%
+#   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+#                             year %in% seq(100, 1700, 100) ~ 'Centuries',
+#                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+#          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+#   arrange(year, pot_veg, anthrome) %>%
+#     left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
+#   select(time_step, pot_veg, biome, anthrome, class, percent_land_area, period, year)
+
 biome_summary <- an12_dgg %>% 
   left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
   select(-pot_vill) %>%
   pivot_longer(-c(id, land_area, pot_veg), names_to = 'time_step', values_to = 'anthrome') %>%
-    mutate(anthrome= as.factor(anthrome), pot_veg = as.factor(pot_veg)) %>%
-  count(time_step, anthrome, pot_veg, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+  left_join(anthrome_key) %>%
+  select(land_area, class, pot_veg, time_step) %>%
+    mutate(pot_veg = as.factor(pot_veg)) %>%
+  count(time_step, class, pot_veg, wt = land_area, name = 'land_area', .drop = FALSE) %>%
   mutate(percent_land_area = land_area / total_land_area,
-                  anthrome = as.numeric(as.character(anthrome)),
          pot_veg = as.numeric(as.character(pot_veg))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, pot_veg, anthrome) %>%
     left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
-  select(time_step, pot_veg, biome, anthrome, class, percent_land_area, period, year)
+  select(time_step, pot_veg, biome, class, percent_land_area, period, year)
 
 write_csv(biome_summary, 'an12_dgg_summary_biomes.csv')
 ```
 
 
-```{r, fig.height = 10, fig.width = 8}
+```{r}
 # there are still horizontal lines from the combined biomes ... or something else
-biome_summary %>%
-  filter(biome != 'Ice, snow') %>%
+# biome_summary %>%
+#   filter(biome != 'Ice, snow') %>%
+#  # mutate(pretty_biomes = str_wrap(biomes)) %>%
+#  ggplot(aes(as.factor(year), percent_land_area)) +
+#   geom_col(aes(fill = class, color = class), size = .6)+ 
+#    facet_grid(biome~period, scales = 'free', space = 'free_x') +
+#   scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+#   scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
+#       theme_classic() +
+#     scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
+#   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
+#                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+#   labs(x = 'Year', y = expression('Percent land surface')) + theme(legend.position = 'right')
+
+bio <- biome_summary %>%
+  filter(biome != 'Ice, snow', level != 'NODATA') %>%
  # mutate(pretty_biomes = str_wrap(biomes)) %>%
  ggplot(aes(as.factor(year), percent_land_area)) +
-  geom_col(aes(fill = class, color = class), size = .6)+ 
-   facet_grid(biome~period, scales = 'free', space = 'free_x') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-      theme_classic() +
+  geom_col(aes(fill = level, color = level))+ 
+   facet_grid(biome~period, scales = 'free', space = 'free_x', switch = 'y') +
+  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome') +
+      theme_bw() +
     scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
                    labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
-  labs(x = 'Year', y = expression('Percent land surface')) + theme(legend.position = 'right')
+  labs(x = 'Year', y = NULL) +
+  theme(legend.position = 'bottom', strip.background.y = element_blank(), strip.text.y.left = element_text(angle = 0, hjust = 1), axis.line.y.left = element_blank(), axis.ticks.y = element_blank(), axis.text.y = element_blank())
 
-ggsave('anthromes_summary_biomes.png', height = 12, width = 10)
+ggsave('anthromes_levels_biomes.png', height = 6, width = 9)
 ```
+
+```{r, fig.width = 6, fig.height=5}
+map <- an12_dgg_inputs %>%
+  left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
+ggplot() +
+  geom_sf(aes(fill = biome), color = NA) +
+  scale_fill_brewer(palette = 'Spectral') +
+     theme_bw() +
+    theme(legend.position = 'bottom') +
+    coord_sf(crs = st_crs("+proj=eck4"))
+```
+
+```{r, fig.height = 8, fig.width = 8}
+map / bio + plot_layout(heights = c(2,1)) + plot_annotation(tag_levels = 'A')
+```
+
+
 
 # Onsets
 ```{r}
@@ -372,97 +471,146 @@ contemp <- an12_dgg %>%
 kba_summary <- contemp_vars %>%
   select(id, kba_km2) %>%
   st_drop_geometry() %>%
+  remove_missing() %>%
   left_join(an12_dgg, by = 'id') %>% 
   pivot_longer(-c(id, kba_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  mutate(anthrome= as.factor(anthrome)) %>%
-  count(time_step, anthrome, wt = kba_km2, name = 'var', .drop = FALSE) %>% 
-  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, kba_km2, level) %>%
+  count(time_step, level, wt = kba_km2, name = 'var', .drop = FALSE) %>% 
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, anthrome) %>%
-  select(time_step, anthrome, class, var, period, year)
+  select(time_step, level, var, period, year)
 
 pa_summary <- contemp_vars %>%
   select(id, pa_km2) %>%
   st_drop_geometry() %>%
+  remove_missing() %>%
   left_join(an12_dgg, by = 'id') %>% 
   pivot_longer(-c(id, pa_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  mutate(anthrome= as.factor(anthrome)) %>%
-  count(time_step, anthrome, wt = pa_km2, name = 'var', .drop = FALSE) %>% 
-  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
+   left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, pa_km2, level) %>%
+  count(time_step, level, wt = pa_km2, name = 'var', .drop = FALSE) %>% 
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, anthrome) %>%
-  select(time_step, anthrome, class, var, period, year)
+  select(time_step, level, var, period, year)
 
 nmh4_summary <- contemp_vars %>%
-  select(id, nmh_4) %>%
+  mutate(nmh4_km2 = nmh_4 * land_ar) %>%
+  select(id, nmh4_km2) %>%
   st_drop_geometry() %>%
   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, nmh_4), names_to = 'time_step', values_to = 'anthrome') %>%
-  mutate(anthrome= as.factor(anthrome)) %>%
-  count(time_step, anthrome, wt = nmh_4, name = 'var', .drop = FALSE) %>% 
-  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
+  pivot_longer(-c(id, nmh4_km2), names_to = 'time_step', values_to = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, nmh4_km2, level) %>%
+  count(time_step, level, wt = nmh4_km2, name = 'var', .drop = FALSE) %>% 
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, anthrome) %>%
-  select(time_step, anthrome, class, var, period, year)
+  select(time_step, level, var, period, year)
 
-nmh34_summary <- contemp_vars %>%
-  select(id, nmh_34) %>%
+nmh3_summary <- contemp_vars %>%
+  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
+  select(id, nmh3_km2) %>%
   st_drop_geometry() %>%
   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, nmh_34), names_to = 'time_step', values_to = 'anthrome') %>%
-  mutate(anthrome= as.factor(anthrome)) %>%
-  count(time_step, anthrome, wt = nmh_34, name = 'var', .drop = FALSE) %>% 
-  mutate(anthrome = as.numeric(as.character(anthrome))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
+  pivot_longer(-c(id, nmh3_km2), names_to = 'time_step', values_to = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, nmh3_km2, level) %>%
+  count(time_step, level, wt = nmh3_km2, name = 'var', .drop = FALSE) %>% 
   left_join(time_key, by = 'time_step') %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, anthrome) %>%
-  select(time_step, anthrome, class, var, period, year)
+  select(time_step, level, var, period, year)
+
+nmh3_summary <- contemp_vars %>%
+  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
+  select(id, nmh3_km2) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, nmh3_km2), names_to = 'time_step', values_to = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, nmh3_km2, level) %>%
+  count(time_step, level, wt = nmh3_km2, name = 'var', .drop = FALSE) %>% 
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  select(time_step, level, var, period, year)
+
+shared_3gc_summary <- contemp_vars %>%
+  filter(X_3_c_4 == 2) %>%
+  select(id, land_ar) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_ar), names_to = 'time_step', values_to = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, land_ar, level) %>%
+  count(time_step, level, wt = land_ar, name = 'var', .drop = FALSE) %>% 
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  select(time_step, level, var, period, year)
+
+wild_3gc_summary <- contemp_vars %>%
+  filter(X_3_c_4 == 3) %>%
+  select(id, land_ar) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_ar), names_to = 'time_step', values_to = 'anthrome') %>%
+    left_join(anthrome_key, by = 'anthrome') %>% 
+  select(id, time_step, land_ar, level) %>%
+  count(time_step, level, wt = land_ar, name = 'var', .drop = FALSE) %>% 
+  left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+  select(time_step, level, var, period, year)
 ```
 
 Summary by total land area.
 
-```{r, fig.width=10, fig.height=10}
-bind_rows(kba_summary,pa_summary, nmh34_summary, nmh4_summary, .id = 'type') %>%
-  mutate(type = case_when(type == 1 ~ 'KBA',
-                          type == 2 ~ 'PA',
-                          type == 3 ~ 'NMH 3+4',
-                          type == 4 ~ 'NMH 4')) %>%
+```{r}
+a <- bind_rows(kba_summary,pa_summary, nmh3_summary, nmh4_summary, shared_3gc_summary, wild_3gc_summary, .id = 'type') %>%
+  mutate(type = factor(case_when(type == 1 ~ 'Key Biodiversity Areas',
+                          type == 2 ~ 'Protected Areas',
+                          type == 3 ~ 'Potential Natural (NMH)',
+                          type == 4 ~ 'Likely Natural (NMH)',
+                          type == 5 ~ 'Shared Lands (3GC)',
+                          type == 6 ~ 'Large Wild Areas (3GC)'), levels = c('Key Biodiversity Areas','Protected Areas','Shared Lands (3GC)', 'Large Wild Areas (3GC)', 'Potential Natural (NMH)',  'Likely Natural (NMH)'))) %>%
+  filter(level != 'NODATA') %>%
+  mutate(var = var / total_land_area) %>%
  ggplot(aes(as.factor(year), var)) +
 #  geom_area(aes(fill = class, color = class), position = 'stack') +
 #  geom_col(aes(fill = class), color = 'lightgrey', size = .2)+
-  geom_col(position = 'fill', aes(fill = class, color = class), size = 1)+
-  geom_hline(yintercept = c(.25, .50, .75), linetype = 2, alpha = .3) +
- facet_grid(type~period, scales = 'free', space = 'free_x') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-      theme_classic() +
-  scale_y_continuous(labels = scales::percent, expand = c(0,0.02)) +
-  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1700, 1800, 1900, 2000),
-                   labels = c('10000 ʙᴄᴇ', '5000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1700 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
-  labs(x = 'Year', y = 'Percent land surface') +
-  theme(legend.position = 'bottom', plot.margin = margin(.2, .2,.2, r = .5, unit = 'cm'))
+  geom_col(aes(fill = level, color = level))+
+  #geom_hline(yintercept = c(.25, .50, .75), linetype = 2, alpha = .3) +
+ facet_grid(type~period, scales = 'free', space = 'free_x', switch = 'y') + #, labeller = label_wrap_gen(width=15)) +
+  scale_color_manual(values = anthrome_level_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome') +
+      theme_bw() +
+ # scale_y_continuous(labels = scales::percent, breaks= scales::breaks_extended(n=3, w = c(.45, .05, .25, .2))) +
+  scale_x_discrete(breaks = c(-8000, 1, 500, 1500, 1800, 1900, 2000),
+                   labels = c('8000 ʙᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1500 ᴄᴇ', '1800 ᴄᴇ', '1900 ᴄᴇ', '2000 ᴄᴇ')) +
+  labs(x = 'Year', y = NULL) +
+  theme(panel.spacing = unit(.25, "lines"),
+        axis.line.y = element_blank(),  axis.text.y = element_blank(), axis.ticks.y = element_blank(), panel.grid.major.y = element_blank(), panel.grid.minor = element_blank(), strip.background = element_blank(), strip.text.y.left = element_text(angle = 0, hjust = 1))
+a
 
-
-ggsave('anthrome_areas_conservatino.png', width = 10, height = 10)
+ggsave('anthrome_areas_conservation.png', width = 6, height = 3.25)
 ```
 
 
@@ -533,10 +681,10 @@ b <- contemp %>%
 ```
 
 
-```{r, fig.width = 10, fig.asp = 2/3}
-((a | b ) + plot_layout(guides = 'collect')) / e  + plot_layout(heights = c(2, 1)) + plot_annotation(tag_levels = 'A')
-
-ggsave('contemp_summary_levels.png', width = 10,height = 10 * 2/3)
+```{r, fig.width = 10, fig.height = 5}
+(a + b + plot_layout(guides = 'collect', widths = c(1.5, 1))) /  wrap_elements(full = e) + plot_layout(heights = c(1.5,1)) + plot_annotation(tag_levels = 'A')
+#fig.width = 6.5, fig.asp = 2/3
+ggsave('contemp_summary_levels.png', width = 10, height = 5)
 ```
 
 ### anthrome classes
@@ -690,8 +838,8 @@ regression_dat <- an12_dgg %>%
   left_join(contemp_vars, by = 'id') %>%
   na.omit 
 
-reg_dat34 <- regression_dat %>% filter(nmh_34 > 0.5)
-reg_dat4 <- regression_dat %>% filter(nmh_4 > 0.5)
+reg_dat34 <- regression_dat %>% filter(nmh_34 > 0.5 )
+reg_dat4 <- regression_dat %>% filter(nmh_4  > 0.5)
 
 
 test_aic_class <- expand_grid(time_step = time_steps_centuries,
@@ -724,21 +872,26 @@ preds_order <- bind_rows(test_aic_class, test_aic_class2, test_aic_class3) %>%
   filter(aic_scaled == min(aic_scaled)) %>%
   arrange(year) %>%
   pull(predictands)
-  
-e <- bind_rows(test_aic_class, test_aic_class2,test_aic_class3) %>%
-  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50', 'kba', 'hfp_max', 'pa50', 'pa', 'ind50', 'ind')))) %>%
+```
+
+```{r}
+#fig.width = 6, fig.height=2
+e <- bind_rows(test_aic_class, test_aic_class2) %>%
+  #bind_rows(test_aic_class, test_aic_class2,test_aic_class3) %>%
+  #mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50', 'kba', 'hfp_max', 'pa50', 'pa', 'ind50', 'ind')))) %>%
+    mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
   group_by(vars) %>%
   mutate(aic_scaled = scales::rescale(aic)) %>%
   ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
   geom_tile() +
   scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
   theme_classic() +
-  #scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
   scale_x_discrete(breaks = c(1, 500, 1000, 1500, 2000),
                    labels = c('1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
   labs(x = 'Predictor Year', y = NULL)
 e
-ggsave(e, 'anthrome_legacies34.png', height = 3, width = 6)
+ggsave(e, 'anthrome_legacies34.png', height = 2, width = 6)
 ```
 
 ```{r, fig.width=6, fig.height=3}
