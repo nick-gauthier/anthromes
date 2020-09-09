@@ -36,6 +36,8 @@ write_sf(dgg_land, 'l12_ISEA3H_dgg_land.shp')
 ```{r}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 dgg_ids <- dgg_land$id
+
+saveRDS(dgg_ids, 'dgg_ids')
 ```
 
 
@@ -55,7 +57,8 @@ hyde2dgg <- function(hyde_varname, hyde_path){
 
 
 hyde_dgg <- hyde_names %>%
-  map(hyde2dgg, '~/Downloads/HYDE/hyde32_output')
+  map(hyde2dgg, '~/Downloads/HYDE/hyde32_output') %>%
+  bind_cols()
 ```
 
 ```{r}
@@ -91,15 +94,11 @@ write_csv(fixed_inputs, 'fixed_inputs.csv')
 ```
 
 ```{r}
+dgg_ids <- readRDS('dgg_ids')
 fixed_inputs <- read_csv('fixed_inputs.csv') %>%
   mutate(id = dgg_ids)
-```
 
-
-
-```{r}
-hyde_dgg <- readRDS('hyde_dgg') %>%
-  bind_cols()
+hyde_dgg <- readRDS('hyde_dgg')
 
 hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
 
@@ -156,30 +155,9 @@ ggplot(anthromes_dgg_shp) +
   geom_sf(aes(fill = as.factor(`1200AD`)), color = NA)
 ```
 
-```{r}
-
-hyde_dgg_long <- map(hyde_dgg, pivot_hyde)
-
-
-write_csv(hyde_dgg_time, 'hyde_dgg_time.csv')
-```
-
-
-```{r}
-anthromes_dgg %>%
-  mutate(id = as.integer(id), anthrome = as.integer(anthrome)) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome)
-```
-
-```{r}
-hyde_dgg_time %>%
-  pull(time_step) %>% unique
-```
 
 #####
 Create final masks and grids
-
-Creating land masks
 ```{r, eval = FALSE}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 
@@ -197,11 +175,12 @@ an12_fixed_inputs <- dgg_land %>%
   select(id, land_area, pot_veg, pot_vill, geometry) %>%
     st_set_crs(4326)
 
+an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')
 an12_dgg <- read_csv('anthromes_dgg.csv') %>%
   filter(id %in% an12_dgg_inputs$id)%>%
   pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
   left_join(time_key) %>%
-  filter(year <= 2000) %>%
+  #filter(year <= 2000) %>%
   arrange(id, year, anthrome) %>%
   mutate(id = as.integer(id), anthrome = as.integer(anthrome)) %>%
   select(-year) %>%
@@ -209,9 +188,22 @@ an12_dgg <- read_csv('anthromes_dgg.csv') %>%
 
 write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
 write_csv(an12_dgg, 'an12_dgg.csv')
+
+
+an12_dgg_inputs %>% dplyr::select(id) %>%
+  left_join(an12_dgg) %>%
+  write_sf('an12_dgg.shp')
 ```
+add regions
 
+```{r}
+regions_dgg <- raster::raster('../simple_regions.tif') %>%
+  exact_extract(an12_dgg_inputs, 'mode')
 
+an12_dgg_inputs %>%  st_set_crs(4326) %>% mutate(region = regions_dgg) %>% left_join(region_key) %>%
+  select(-region) %>%
+  write_sf('an12_dgg_inputs.shp')
+```
 
 # DGG from analysis script
 ```{r}
