@@ -759,7 +759,17 @@ regression_dat <- an12_dgg %>%
   dplyr::select(-anthrome, -level, -type) %>%
   pivot_wider(names_from = time, values_from = class) %>%
   left_join(contemp_vars, by = 'id') %>%
-  na.omit 
+  na.omit %>%
+  select(id, land_ar, nmh, pop17, hfp_max:kba50, all_of(unique(c(time_steps_millennia, time_steps_centuries))), `2017AD`) %>%
+  rename_with(~paste0('an_', .), all_of(unique(c(time_steps_millennia, time_steps_centuries, '2017AD')))) %>%
+  left_join(an12_dgg_inputs %>%
+    select(id, region_name) %>%
+    st_drop_geometry()) %>%
+  st_as_sf() %>%
+  mutate(pt = st_centroid(.)) %>%
+ mutate(lon = sf::st_coordinates(pt)[,1],
+                lat = sf::st_coordinates(pt)[,2]) %>%
+  select(-pt)
 ```
 
 
@@ -767,45 +777,275 @@ regression_dat <- an12_dgg %>%
 
 
 ```{r}
-library(nnet)
 calc_aic <- function(predictand, predictor, fam, dat){
   as.formula(paste(predictand, '~', predictor)) %>%
     glm(family = fam, data = dat) %>% 
     AIC
 }
-calc_aic3 <- function(predictand, predictor){
-  as.formula(paste(predictand, '~', predictor)) %>%
-    multinom(data = reg_dat34) %>% 
+
+calc_aic_gam <- function(predictand, predictor, fam, dat){
+  as.formula(paste(predictand, '~', predictor, '+ te(lon,lat)')) %>%
+    bam(family = fam, data = dat) %>% 
     AIC
 }
 ```
 
-```{r}
-test_aic_class <- expand_grid(time_step = time_steps_centuries,
-                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = regression_dat)) %>%
-  left_join(time_key)
 
-test_aic_class <- expand_grid(time_step = time_steps_centuries,
+How well does the modern anthromes predict these variables compared to the max human footprint. also look at the anthrome levels. so the order is class -> level -> hfp_max for all of these except for ind50, which is hfp -> class -> level. repeating for 100 threshold for the logistic regression, kba is the same but pa and ind have class ->hfp -> level.
+
+so in all cases bug ind50 the classes are better than the hfp. in all cases but ind50, ind, and pa are the levels better than hfp
+
+```{r}
+pres_pred1 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
+                   predictands = c('v_thr', 'v_rich')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  arrange(aic)
+
+pres_pred2 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  arrange(aic)
+
+pres_pred3 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
+                   predictands = c('kba', 'ind', 'pa')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(),dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  arrange(aic)
+```
+
+```{r}
+```
+
+
+
+
+Fit glms for all the variables on a global scale.
+
+```{r}
+global_legacy_glm1 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = regression_dat))
+
+global_legacy_glm2 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = regression_dat))
+
+global_legacy_glm3 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba', 'ind', 'pa')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = regression_dat))
+```
+
+
+plot the results
+```{r}
+bind_rows(global_legacy_glm1,global_legacy_glm2) %>%
+  left_join(time_key) %>%
+    mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
+  group_by(vars) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+    geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
+                   labels = c('10000 ᴄᴇ', '5000 ᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL) +
+  theme(strip.background = element_blank()) +
+  coord_fixed()
+```
+Compare the thresholds for the logistic regressions. it looks like the difference matters most for kba.
+```{r}
+bind_rows(global_legacy_glm2,global_legacy_glm3) %>%
+  left_join(time_key) %>%
+    mutate(vars = factor(predictands, levels = rev(c('kba', 'kba50', 'pa', 'pa50','ind', 'ind50')))) %>%
+  group_by(vars) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+    geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
+                   labels = c('10000 ᴄᴇ', '5000 ᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL) +
+  theme(strip.background = element_blank()) +
+  coord_fixed()
+```
+for jbam 
+
+```{r}
+bind_rows(global_legacy_glm1,global_legacy_glm2) %>%
+  group_by(predictands) %>%
+  filter(aic == min(aic)) %>%
+  bind_rows(., pres_pred1, pres_pred2) %>%
+  arrange(aic)
+```
+
+now try with the spatial smoother
+
+```{r}
+global_legacy_gam <- expand_grid(predictors = c('hfp_max', 'an_2017AD'),
+                   predictands = c('v_thr', 'v_rich')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic_gam, fam = poisson(), dat = regression_dat))
+```
+
+
+```{r}
+global_legacy_gam1 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic_gam, fam = poisson(), dat = regression_dat))
+
+global_legacy_gam2 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic_gam, fam = binomial(), dat = regression_dat))
+
+global_legacy_gam3 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba', 'ind', 'pa')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic_gam, fam = binomial(), dat = regression_dat))
+
+```
+
+```{r}
+test_aic_class1a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 1))) %>%
+  mutate(nmh = 'NMH1')
+
+test_aic_class2a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
                    predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
   mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = regression_dat)) %>%
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 2)))  %>%
+  mutate(nmh = 'NMH2')
+
+test_aic_class3a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 3)))  %>%
+  mutate(nmh = 'NMH3')
+test_aic_class4a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 4)))  %>%
+  mutate(nmh = 'NMH4')
+
+test_aic_class1b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 1)))  %>%
+  mutate(nmh = 'NMH1')
+
+test_aic_class2b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 2)))  %>%
+  mutate(nmh = 'NMH2')
+
+test_aic_class3b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 3))) %>%
+  mutate(nmh = 'NMH3')
+
+test_aic_class4b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 4))) %>%
+  mutate(nmh = 'NMH4')
+
+
+test_dat <- bind_rows(test_aic_class1a, test_aic_class1b,test_aic_class2a, test_aic_class2b,test_aic_class3a, test_aic_class3b,test_aic_class4a, test_aic_class4b) %>%
   left_join(time_key)
 ```
 
 ```{r}
-qplot(year, aic, data = test_aic_class, geom = 'point')
+ test_dat %>%
+    mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
+  group_by(vars, nmh) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+    geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  facet_wrap(~nmh, ncol = 1) +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
+                   labels = c('10000 ᴄᴇ', '5000 ᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL) +
+  theme(strip.background = element_blank())
 ```
 
+```{r}
+region_key
+```
+
+```{r}
+test_dat <- regression_dat %>% 
+  select(-geometry) %>%
+  group_nest(region_name)
+```
+
+```{r}
+fit_mod1 <- function(x) {
+  expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = x))
+}
+
+fit_mod2 <- function(x) {
+  expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                   predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = x))
+}
+```
+
+
+```{r}
+t1 <- test_dat %>%
+  mutate(mod = map(data, fit_mod1)) %>%
+  select(-data)
+
+t2 <- test_dat %>%
+  mutate(mod = map(data, fit_mod2)) %>%
+  select(-data)
+
+test_dat2 <- bind_rows(t1, t2) %>%
+  unnest(mod) %>%
+  left_join(time_key)
+```
+
+```{r}
+ test_dat2 %>%
+    mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
+  group_by(vars, region_name) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+    geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  facet_wrap(~region_name, ncol = 1) +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
+                   labels = c('10000 ᴄᴇ', '5000 ᴄᴇ', '1 ᴄᴇ', '500 ᴄᴇ', '1000 ᴄᴇ', '1500 ᴄᴇ', '2000 ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL) +
+  theme(strip.background = element_blank())
+```
 
 
 ```{r}
 reg_dat34 <- regression_dat %>% filter(nmh_34 > 0.5 )
 reg_dat4 <- regression_dat %>% filter(nmh_4  > 0.5)
-
-
-
 
 test_aic_class2 <- expand_grid(time_step = time_steps_centuries,
                    predictands = c('kba50', 'ind50', 'pa50')) %>%
@@ -819,6 +1059,14 @@ test_aic_class3 <- expand_grid(time_step = time_steps_centuries,
          aic = map2_dbl(predictands, predictors, calc_aic2)) %>%
   left_join(time_key)
 
+
+#library(nnet)
+#
+#calc_aic3 <- function(predictand, predictor){
+#  as.formula(paste(predictand, '~', predictor)) %>%
+#    multinom(data = reg_dat34) %>% 
+#    AIC
+#}
 #test_aic_class3 <- expand_grid(time_step = time_steps_centuries,
 #                   predictands = c('`2017AD`')) %>%
 #  mutate(predictors = paste0('`', time_step, '`'),
@@ -836,7 +1084,6 @@ preds_order <- bind_rows(test_aic_class, test_aic_class2, test_aic_class3) %>%
 ```{r}
 #fig.width = 6, fig.height=2
 e <- bind_rows(test_aic_class, test_aic_class2) %>%
-  #bind_rows(test_aic_class, test_aic_class2,test_aic_class3) %>%
   #mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50', 'kba', 'hfp_max', 'pa50', 'pa', 'ind50', 'ind')))) %>%
     mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
   group_by(vars) %>%
@@ -920,46 +1167,74 @@ sum(contemp_vars$nmh_34 == 1);sum(contemp_vars$nmh_34 > .99)
 
 ```{r}
 # check out some regressions
-m1 <- glm(v_rich ~ `1500AD`, family = poisson, data = regression_dat)
-m2 <- glm(v_rich ~ `2000AD`, family = poisson, data = regression_dat)
-m3 <- glm(v_rich ~ `1500AD` + `2000AD`, family = poisson, data = regression_dat)
-m4 <- glm(v_rich ~ `1500AD` * `2000AD`, family = poisson, data = regression_dat)
+m1 <- bam(v_rich ~te(lon,lat), family = poisson, data = test_dat2) 
+m2 <- bam(v_rich ~ an_2000AD + te(lon,lat), family = poisson, data = filter(regression_dat, region_name == 'Latin America'))
+m3 <- bam(v_rich ~ an_10000BC+ te(lon,lat), family = poisson, data = filter(regression_dat, region_name == 'Latin America')) 
 
-AIC(m1,m2,m3,m4)
+AIC(m1,m2,m3, m4)
+
+plot(m4)
+summary(m2)
+summary(m4)
+plot(m5)
+
+gam.check(m7)
 ```
 
-130200000
-131600000
-121300000
 
-```{r}
-contemp_vars %>%
-st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = v_rich), color = NA) +
-  scale_fill_viridis_c() +
-  coord_sf(crs = st_crs("+proj=eck4"))
 
-test %>%
-st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = -10, ymax = 20))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = pred1500), color = NA) +
-  scale_fill_viridis_c(limits = c(0,50)) +
-  coord_sf(crs = st_crs("+proj=eck4"))
-
-test %>%
-st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = -10, ymax = 20))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = pred2000), color = NA) +
-  scale_fill_viridis_c(limits = c(0,50)) +
-  coord_sf(crs = st_crs("+proj=eck4"))
-```
 ```{r}
 test <- regression_dat %>%
-  modelr::add_predictions(m1, var = 'pred1500',type = 'response') %>%
+  filter(region_name == 'Latin America') %>%
+  modelr::add_predictions(m1, var = 'tensor',type = 'response') %>%
   modelr::add_predictions(m2, var = 'pred2000',type = 'response') %>%
-  st_as_sf
+   modelr::add_predictions(m3, var = 'pred2017',type = 'response') %>%
+     modelr::add_predictions(m4, var = 'pred10000', type = 'response')
+```
 
+```{r}
+test %>%
+#st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = 0, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = v_rich), color = NA) +
+  scale_fill_viridis_c(limits = c(0, 950)) +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+test %>%
+#st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = -10, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = tensor), color = NA) +
+  scale_fill_viridis_c(limits = c(0,950)) +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+test %>%
+#st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = -10, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pred2000), color = NA) +
+  scale_fill_viridis_c(limits = c(0,950)) +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+test %>%
+#st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = -10, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pred10000), color = NA) +
+  scale_fill_viridis_c(limits = c(0,950)) +
+  coord_sf(crs = st_crs("+proj=eck4"))
+
+test %>%
+#st_crop(st_bbox(c(xmin = -100, xmax = -50, ymin = -10, ymax = 20))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = pred2017), color = NA) +
+  scale_fill_viridis_c(limits = c(0,950)) +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
+
+```{r}
+test %>%
+  ggplot() +
+  geom_sf(aes(fill = v_thr), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
 
