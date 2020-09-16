@@ -138,10 +138,6 @@ anthromes_summary <- an12_dgg %>%
   select(time_step, anthrome, class, percent_land_area, period, year)
 ```
 
-```{r}
-write_csv(anthromes_summary, 'an12_dgg_summary.csv')
-```
-
 
 Get hyde population data.
 ```{r}
@@ -183,9 +179,8 @@ region_summary <- an12_dgg %>%
     mutate(percent_land_area = land_area / sum(land_area)) %>%
   ungroup() %>%
   select(time_step, region_name, class, percent_land_area, period, year)
-
-write_csv(region_summary, 'an12_dgg_summary_region.csv')
 ```
+
 
 ```{r}
 hyde_pop_regions <- hyde_pop %>%
@@ -206,9 +201,6 @@ hyde_pop_regions <- hyde_pop %>%
   mutate(pop_percent = population / max(population)) %>%
   ungroup() %>%
   left_join(time_key)
-
-hyde_pop_reg1 <- hyde_pop_regions%>% filter(region_name %in% region_key$region_name[1:4])
-hyde_pop_reg2 <- hyde_pop_regions%>% filter(region_name %in% region_key$region_name[5:8])
 ```
 
 ## Biome Summary
@@ -232,8 +224,6 @@ biome_summary <- an12_dgg %>%
       mutate(percent_land_area = land_area / sum(land_area)) %>%
   ungroup() %>%
   select(time_step, biome, class, percent_land_area, period, year)
-
-write_csv(biome_summary, 'an12_dgg_summary_biomes.csv')
 ```
 
 ```{r}
@@ -407,8 +397,49 @@ wild_3gc_summary <- contemp_vars %>%
                             year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
   select(time_step, class, var, period, year)
+
+contemp_summary <- bind_rows(kba_summary,pa_summary, ind_summary, unused_summary, nmh3_summary, nmh4_summary, shared_3gc_summary, wild_3gc_summary, .id = 'type') %>%
+  mutate(type = factor(case_when(type == 1 ~ 'Key Biodiversity Areas',
+                          type == 2 ~ 'Protected Areas',
+                          type == 3 ~ 'Indigenous Lands',
+                          type == 4 ~ 'Seminatural and Wildlands (2017)',
+                          type == 5 ~ 'Potential Natural (NMH)',
+                          type == 6 ~ 'Likely Natural (NMH)',
+                          type == 7 ~ 'Shared Lands (3GC)',
+                          type == 8 ~ 'Large Wild Areas (3GC)'), levels = c('Key Biodiversity Areas','Protected Areas', 'Indigenous Lands', 'Seminatural and Wildlands (2017)', 'Shared Lands (3GC)', 'Large Wild Areas (3GC)', 'Potential Natural (NMH)',  'Likely Natural (NMH)')))
 ```
 
+## Save summary files
+
+```{r}
+anthromes_summary %>% 
+  select(-period, -anthrome) %>% 
+  pivot_wider(id_cols = c(time_step, year), names_from = class, values_from = percent_land_area) %>%
+  arrange(year) %>%
+  mutate(across(everything(), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary.csv')
+
+region_summary %>%
+  select(-period) %>%
+  pivot_wider(id_cols = c(time_step, year, region_name), names_from = class, values_from = percent_land_area) %>%
+  arrange(year) %>%
+  mutate(across(everything(), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_region.csv')
+
+biome_summary %>%
+  select(-period) %>%
+ pivot_wider(id_cols = c(time_step, year, biome), names_from = class, values_from = percent_land_area) %>%
+  arrange(year) %>%
+  mutate(across(everything(), ~replace_na(.x, 0))) %>%
+write_csv('data/derived_data/an12_dgg_summary_biomes.csv')
+
+contemp_summary %>%
+  select(-period) %>%
+ pivot_wider(id_cols = c(time_step, year, type), names_from = class, values_from = var) %>%
+  arrange(year) %>%
+  mutate(across(everything(), ~replace_na(.x, 0))) %>%
+write_csv('data/derived_data/an12_dgg_summary_contemp.csv')
+```
 
 # Regression
 
@@ -535,9 +566,9 @@ addSmallLegend <- function(myPlot, pointSize = 3, textSize = 8, spaceLegend = .8
 ```{r, fig.width=9, fig.height=3.5}
 global_plot <- anthromes_summary %>%
         mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
-  filter(class != 'Ice, uninhabited') %>%
+  filter(class != 'Ice') %>%
  ggplot(aes(time_step, percent_land_area)) +
-    geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+    geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
         geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
       geom_line(data = hyde_pop_all, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1) +
   scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
@@ -548,18 +579,7 @@ global_plot <- anthromes_summary %>%
   scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
                    labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land area') +
-  theme(legend.position = 'bottom', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
-
-addSmallLegend(global_plot)
-```
-
-
-```{r}
-ggsave('anthrome_global_summary.svg', plot = addSmallLegend(global_plot), width = 9, height = 3.5)
-```
-
-```{r}
-global_plot / region_plot  + plot_layout(heights = c(1,3))  + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'none')
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
 ```
 
 
@@ -586,16 +606,12 @@ region_plot <- region_summary %>%
 addSmallLegend(region_plot)
 ```
 
-```{r}
-ggsave('anthromes_summary_region.svg', plot = addSmallLegend(region_plot), height = 8, width = 9)
-```
-
 ## Figure 3 - Biome summary
 
 ```{r fig.width = 9, fig.height = 8}
 biome_plot <- biome_summary %>% 
     mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
-  filter( class != 'NODATA', class != 'Ice, uninhabited', biome != 'Ice, snow') %>%
+  filter( class != 'NODATA', class != 'Ice', biome != 'Ice, snow') %>%
  ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), width = .8, size = .1)+
       geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
@@ -614,30 +630,18 @@ biome_plot <- biome_summary %>%
 addSmallLegend(biome_plot)
 ```
 
-```{r}
-ggsave('anthromes_summary_biome.svg', plot =addSmallLegend(biome_plot), height = 8, width = 9)
-```
-
 ## Figure 4 - Contemporary Data
 
 ```{r}
-cons_plot <- bind_rows(kba_summary,pa_summary, ind_summary, unused_summary, nmh3_summary, nmh4_summary, shared_3gc_summary, wild_3gc_summary, .id = 'type') %>%
-  mutate(type = factor(case_when(type == 1 ~ 'Key Biodiversity Areas',
-                          type == 2 ~ 'Protected Areas',
-                          type == 3 ~ 'Indigenous Lands',
-                          type == 4 ~ 'Unused Anthromes (2017)',
-                          type == 5 ~ 'Potential Natural (NMH)',
-                          type == 6 ~ 'Likely Natural (NMH)',
-                          type == 7 ~ 'Shared Lands (3GC)',
-                          type == 8 ~ 'Large Wild Areas (3GC)'), levels = c('Key Biodiversity Areas','Protected Areas', 'Indigenous Lands', 'Unused Anthromes (2017)', 'Shared Lands (3GC)', 'Large Wild Areas (3GC)', 'Potential Natural (NMH)',  'Likely Natural (NMH)'))) %>%
+contemp_plot <- contemp_summary %>%
       mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
-  filter(class != 'NODATA', class != 'Ice, uninhabited') %>%
+  filter(class != 'NODATA', class != 'Ice') %>%
   mutate(var = var / total_land_area) %>%
  ggplot(aes(time_step, var)) +
-   geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+   geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
       geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
-  #      geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
-   facet_wrap(~type, ncol = 2, dir = 'h', scales = 'free_y') +
+       geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+   facet_wrap(~type, ncol = 2, dir = 'h') +
   scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
     scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
    theme_classic() +
@@ -645,9 +649,9 @@ cons_plot <- bind_rows(kba_summary,pa_summary, ind_summary, unused_summary, nmh3
   scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
                    labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land surface') +
-  theme(strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+  theme(strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.8, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
 
-addSmallLegend(cons_plot)
+addSmallLegend(contemp_plot)
 ```
 
 ```{r}
@@ -685,14 +689,26 @@ natural_legacy_plot <- bind_rows(global_legacy_glm1_nmh34,global_legacy_glm2_nmh
 ```
 
 ```{r, fig.width=8, fig.height =8}
-legacy_plot <- (wrap_elements(full = addSmallLegend(cons_plot)) / (global_legacy_plot/natural_legacy_plot + plot_layout(guides = 'collect'))) + plot_layout(heights = c(2,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
+legacy_plot <- (wrap_elements(full = addSmallLegend(contemp_plot)) / (global_legacy_plot/natural_legacy_plot + plot_layout(guides = 'collect'))) + plot_layout(heights = c(2,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
 legacy_plot
 ```
+## Save figures
 
 ```{r}
-ggsave('anthromes_legacies.svg', plot =legacy_plot, height = 8, width = 8)
+# save vector graphics for high quality figures
+ggsave('figures/anthrome_summary_global.svg', plot = global_plot, width = 9, height = 3.5)
+ggsave('figures/anthromes_summary_region.svg', plot = addSmallLegend(region_plot), height = 8, width = 9)
+ggsave('figures/anthromes_summary_biome.svg', plot = addSmallLegend(biome_plot), height = 8, width = 9)
+ggsave('figures/anthromes_legacies.svg', plot = legacy_plot, height = 8, width = 8)
+
+# save pngs for drafts and email
+ggsave('figures/anthrome_summary_global.png', plot = global_plot, width = 9, height = 3.5, dpi = 600)
+ggsave('figures/anthromes_summary_region.png', plot = addSmallLegend(region_plot), height = 8, width = 9, dpi = 600)
+ggsave('figures/anthromes_summary_biome.png', plot = addSmallLegend(biome_plot), height = 8, width = 9, dpi = 600)
+ggsave('figures/anthromes_legacies.png', plot = legacy_plot, height = 8, width = 8, dpi = 600)
 ```
+
 
 
 # GLM
@@ -1045,7 +1061,7 @@ e <- bind_rows(test_aic_class, test_aic_class2) %>%
                    labels = c('1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
   labs(x = 'Predictor Year', y = NULL)
 e
-ggsave(e, 'anthrome_legacies34.png', height = 2, width = 6)
+ggsave(e, 'figures/anthrome_legacies34.png', height = 2, width = 6)
 ```
 
 ```{r, fig.width=6, fig.height=3}
@@ -1308,7 +1324,7 @@ anthromes_summary %>%
   theme(legend.position  = 'bottom') +
   geom_treemap_subgroup_text(reflow = TRUE, fontface = 'italic', alpha = .8)
 
-ggsave('treeplot1.png', width = 10, height = 4.5)
+ggsave('figures/treeplot1.png', width = 10, height = 4.5)
 ```
 
 ```{r, fig.height=10, fig.width = 10}
@@ -1323,7 +1339,7 @@ anthromes_summary %>%
   theme(legend.position  = 'bottom') +
   geom_treemap_subgroup_text(reflow = TRUE, fontface = 'italic', alpha = .8)
 
-ggsave('treeplot2.png', width = 10, height = 10)
+ggsave('figures/treeplot2.png', width = 10, height = 10)
 ```
 
 # Alluvial plots
@@ -1450,7 +1466,7 @@ contemp %>%
 ```{r, fig.width = 10, fig.height = 5}
 (a + b + plot_layout(guides = 'collect', widths = c(1.5, 1))) /  wrap_elements(full = e) + plot_layout(heights = c(1.5,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 #fig.width = 6.5, fig.asp = 2/3
-ggsave('contemp_summary_levels.png', width = 10, height = 5)
+ggsave('figures/contemp_summary_levels.png', width = 10, height = 5)
 ```
 
 
