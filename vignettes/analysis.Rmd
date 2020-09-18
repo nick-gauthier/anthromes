@@ -1,5 +1,5 @@
 ---
-title: "Anthromes"
+title: "Anthromes-12K"
 author: "Nick Gauthier"
 date: "6/30/2020"
 output: html_document
@@ -40,7 +40,7 @@ contemp_vars <- read_sf('contemp_vars.shp') %>%
 
 Summary proportion of global land area for each anthrome.
 ```{r}
-anthromes_summary <- an12_dgg %>% 
+global_summary <- an12_dgg %>% 
   left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
   select(-pot_veg, -pot_vill, -region_name) %>%
   pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
@@ -332,7 +332,7 @@ contemp_summary <- bind_rows(kba_summary,pa_summary, ind_summary, unused_summary
 ### Save summary files
 
 ```{r}
-anthromes_summary %>% 
+global_summary %>% 
   select(-period, -anthrome, -year) %>% 
   pivot_wider(id_cols = c(class), names_from = time_step, values_from = percent_land_area) %>%
   mutate(across(everything(), ~replace_na(.x, 0))) %>%
@@ -441,7 +441,7 @@ an12_dgg %>%
 
 
 
-# Regression
+# Anthrome Legacies
 
 Prepare a data frame for regression.
 ```{r}
@@ -477,6 +477,7 @@ hist(contemp_vars$nmh_34)
 hist(contemp_vars$nmh_4)
 ```
 
+Define functions to fit a model and calculate AIC.
 ```{r}
 calc_aic <- function(predictand, predictor, fam, dat){
   as.formula(paste(predictand, '~', predictor)) %>%
@@ -492,60 +493,64 @@ calc_aic_gam <- function(predictand, predictor, fam, dat){
 ```
 
 
-How well do the modern anthromes predict these variables compared to the max human footprint. also look at the anthrome levels. so the order is class -> level -> hfp_max for all of these except for ind50, which is hfp -> class -> level. repeating for 100 threshold for the logistic regression, kba is the same but pa and ind have class ->hfp -> level.
+How well do the modern anthromes predict these variables compared to the max human footprint. The order is class -> level -> hfp_max for all of these except for ind50, which is hfp -> class -> level. Repeating for 100 threshold for the logistic regression, kba is the same but pa and ind have class -> hfp -> level.
 
 so in all cases bug ind50 the classes are better than the hfp. in all cases but ind50, ind, and pa are the levels better than hfp
 
 ```{r}
 pres_pred1 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
                           predictands = c('v_thr', 'v_rich')) %>%
-  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), 
+                        dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
   arrange(aic)
 
 pres_pred2 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
                           predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), 
+                        dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
   arrange(aic)
 
 pres_pred3 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
                           predictands = c('kba', 'ind', 'pa')) %>%
-  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(),dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(),
+                        dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
   arrange(aic)
 ```
 
 
-
-Fit glms for all the variables on a global scale and for natural habitats
+Fit a global GLM and one limited to natural areas.
 
 ```{r}
-global_legacy_glm1 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+global_legacy_glm1 <- expand_grid(time_step = unique(c(time_steps_millennia, 
+                                                       time_steps_centuries)),
                                   predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
   mutate(predictors =  paste0('an_', time_step),
          aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = regression_dat))
 
-global_legacy_glm2 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+global_legacy_glm2 <- expand_grid(time_step = unique(c(time_steps_millennia, 
+                                                       time_steps_centuries)),
                                   predictands = c('kba50', 'ind50', 'pa50')) %>%
   mutate(predictors =  paste0('an_', time_step),
          aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = regression_dat))
 
-global_legacy_glm1_nmh34 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+global_legacy_glm1_nmh34 <- expand_grid(time_step = unique(c(time_steps_millennia, 
+                                                             time_steps_centuries)),
                                         predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
   mutate(predictors =  paste0('an_', time_step),
          aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh_34 > 0.5)))
 
-global_legacy_glm2_nmh34 <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+global_legacy_glm2_nmh34 <- expand_grid(time_step = unique(c(time_steps_millennia, 
+                                                             time_steps_centuries)),
                                         predictands = c('kba50', 'ind50', 'pa50')) %>%
   mutate(predictors =  paste0('an_', time_step),
          aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh_34 > 0.5)))
 ```
 
-
-
 # Figures
 
 ```{r}
 # setup legends for plotting
-# custom function while bug remains in ggplot due to new graphics engine?
+# custom function while bug remains in ggplot due to new graphics engine
 image_ggplot <- function(image, interpolate = FALSE) { info <- magick::image_info(image) 
 ggplot2::ggplot(data.frame(x = 0, y = 0), ggplot2::aes_string('x', 'y')) + ggplot2::geom_blank() + ggplot2::theme_void() + ggplot2::coord_fixed(expand = FALSE, xlim = c(0, info$width), ylim = c(0, info$height)) + ggplot2::annotation_raster(image, 0, info$width, info$height, 0, interpolate = interpolate) + NULL 
 }
@@ -618,8 +623,8 @@ biome_plot <- biome_summary %>%
   geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
   geom_line(data = hyde_pop_biomes, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1) +
   facet_wrap(~biome, ncol = 2, dir = 'v') +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
   theme_classic() +
   scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
   scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
@@ -642,8 +647,8 @@ contemp_plot <- contemp_summary %>%
   geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
   geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
   facet_wrap(~type, ncol = 2, dir = 'h') +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
   theme_classic() +
   scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
   scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
@@ -679,7 +684,7 @@ natural_legacy_plot <- bind_rows(global_legacy_glm1_nmh34,global_legacy_glm2_nmh
   ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
   geom_tile() +
   geom_vline(xintercept = '1', color = 'red', linetype = 2) +
-  scale_fill_viridis_c(direction = -1, name = 'Predictive ability\n(scaled AIC)', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  scale_fill_viridis_c(direction = -1, name = 'Relative Predictive\nSkill (AIC)', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
   theme_classic() +
   scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
@@ -710,8 +715,161 @@ ggsave('figures/anthromes_legacies.png', plot = legacy_plot, height = 8, width =
 ```
 
 
-# Other Analyses
+# Other Visualizations
 Other visualization and analyses not included in the main paper.
+
+
+## Lasso
+
+```{r}
+library(Matrix)
+library(glmnet)
+require(doMC)
+
+regression_mat <-  model.matrix(~ .-1,  data = select(regression_dat, any_of(paste0('an_', time_steps_centuries)) | any_of(paste0('an_', time_steps_millennia))) %>% st_drop_geometry()) %>% Matrix(sparse = TRUE)
+
+# this doesn't treat the predictand as a factor 
+registerDoMC(cores = 3)
+glmnet_mod <- cv.glmnet(regression_mat, regression_dat$v_thr, foldid = as.numeric(as.factor(regression_dat$region_name)), family = 'poisson', intercept = FALSE, standardize = FALSE, parallel = TRUE)
+glmnet_mod
+plot(glmnet_mod)
+
+coef(glmnet_mod, s= "lambda.1se")
+
+```
+
+
+## Regional Breakdown
+
+```{r}
+test_dat <- regression_dat %>% 
+  select(-geometry) %>%
+  group_nest(region_name)
+```
+
+```{r}
+fit_mod1 <- function(x) {
+  expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+              predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+    mutate(predictors = paste0('an_', time_step),
+           aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = x))
+}
+
+fit_mod2 <- function(x) {
+  expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+              predictands = c('kba50', 'ind50', 'pa50')) %>%
+    mutate(predictors = paste0('an_', time_step),
+           aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = x))
+}
+```
+
+
+```{r}
+t1 <- test_dat %>%
+  mutate(mod = map(data, fit_mod1)) %>%
+  select(-data)
+
+t2 <- test_dat %>%
+  mutate(mod = map(data, fit_mod2)) %>%
+  select(-data)
+
+test_dat2 <- bind_rows(t1, t2) %>%
+  unnest(mod) %>%
+  left_join(time_key)
+```
+
+```{r}
+test_dat2 %>%
+  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
+  group_by(vars, region_name) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+  geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  facet_wrap(~region_name, ncol = 1) +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
+                   labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL) +
+  theme(strip.background = element_blank())
+```
+
+
+## NMH breakdown
+
+```{r}
+test_aic_class1a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors =  paste0('an_', time_step),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 1))) %>%
+  mutate(nmh = 'NMH1')
+
+test_aic_class2a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 2)))  %>%
+  mutate(nmh = 'NMH2')
+
+test_aic_class3a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 3)))  %>%
+  mutate(nmh = 'NMH3')
+test_aic_class4a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 4)))  %>%
+  mutate(nmh = 'NMH4')
+
+test_aic_class1b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 1)))  %>%
+  mutate(nmh = 'NMH1')
+
+test_aic_class2b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 2)))  %>%
+  mutate(nmh = 'NMH2')
+
+test_aic_class3b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 3))) %>%
+  mutate(nmh = 'NMH3')
+
+test_aic_class4b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
+                                predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(predictors = paste0('`', time_step, '`'),
+         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 4))) %>%
+  mutate(nmh = 'NMH4')
+
+
+test_dat <- bind_rows(test_aic_class1a, test_aic_class1b,test_aic_class2a, test_aic_class2b,test_aic_class3a, test_aic_class3b,test_aic_class4a, test_aic_class4b) %>%
+  left_join(time_key)
+```
+
+```{r}
+test_dat %>%
+  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
+  group_by(vars, nmh) %>%
+  mutate(aic_scaled = scales::rescale(aic)) %>%
+  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  geom_tile() +
+  geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  facet_wrap(~nmh, ncol = 1) +
+  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  theme_classic() +
+  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
+                   labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
+  labs(x = 'Predictor Year', y = NULL) +
+  theme(strip.background = element_blank())
+```
+
 
 ## GLM binomial threshold
 
@@ -842,136 +1000,6 @@ bind_rows(global_legacy_glm1,global_legacy_glm2) %>%
   filter(aic == min(aic)) %>%
   bind_rows(., pres_pred1, pres_pred2) %>%
   arrange(aic)
-```
-
-## NMH breakdown
-
-```{r}
-test_aic_class1a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors =  paste0('an_', time_step),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 1))) %>%
-  mutate(nmh = 'NMH1')
-
-test_aic_class2a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 2)))  %>%
-  mutate(nmh = 'NMH2')
-
-test_aic_class3a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 3)))  %>%
-  mutate(nmh = 'NMH3')
-test_aic_class4a <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh == 4)))  %>%
-  mutate(nmh = 'NMH4')
-
-test_aic_class1b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 1)))  %>%
-  mutate(nmh = 'NMH1')
-
-test_aic_class2b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 2)))  %>%
-  mutate(nmh = 'NMH2')
-
-test_aic_class3b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 3))) %>%
-  mutate(nmh = 'NMH3')
-
-test_aic_class4b <- expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-                                predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(predictors = paste0('`', time_step, '`'),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh == 4))) %>%
-  mutate(nmh = 'NMH4')
-
-
-test_dat <- bind_rows(test_aic_class1a, test_aic_class1b,test_aic_class2a, test_aic_class2b,test_aic_class3a, test_aic_class3b,test_aic_class4a, test_aic_class4b) %>%
-  left_join(time_key)
-```
-
-```{r}
-test_dat %>%
-  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
-  group_by(vars, nmh) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
-  geom_tile() +
-  geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
-  facet_wrap(~nmh, ncol = 1) +
-  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
-  theme_classic() +
-  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
-  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
-                   labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
-  labs(x = 'Predictor Year', y = NULL) +
-  theme(strip.background = element_blank())
-```
-
-## Regional Breakdown
-
-```{r}
-test_dat <- regression_dat %>% 
-  select(-geometry) %>%
-  group_nest(region_name)
-```
-
-```{r}
-fit_mod1 <- function(x) {
-  expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-              predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-    mutate(predictors = paste0('an_', time_step),
-           aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = x))
-}
-
-fit_mod2 <- function(x) {
-  expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-              predictands = c('kba50', 'ind50', 'pa50')) %>%
-    mutate(predictors = paste0('an_', time_step),
-           aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = x))
-}
-```
-
-
-```{r}
-t1 <- test_dat %>%
-  mutate(mod = map(data, fit_mod1)) %>%
-  select(-data)
-
-t2 <- test_dat %>%
-  mutate(mod = map(data, fit_mod2)) %>%
-  select(-data)
-
-test_dat2 <- bind_rows(t1, t2) %>%
-  unnest(mod) %>%
-  left_join(time_key)
-```
-
-```{r}
-test_dat2 %>%
-  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
-  group_by(vars, region_name) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
-  geom_tile() +
-  geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
-  facet_wrap(~region_name, ncol = 1) +
-  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
-  theme_classic() +
-  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
-  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
-                   labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
-  labs(x = 'Predictor Year', y = NULL) +
-  theme(strip.background = element_blank())
 ```
 
 
@@ -1163,24 +1191,7 @@ t1 %>% st_as_sf %>%
   coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
-## Lasso
 
-```{r}
-library(Matrix)
-library(glmnet)
-require(doMC)
-
-regression_mat <-  model.matrix(~ .-1,  data = select(regression_dat, any_of(paste0('an_', c(time_steps_centuries, '2010AD', '2017AD'))) | any_of(paste0('an_', time_steps_millennia))) %>% st_drop_geometry()) %>% Matrix(sparse = TRUE)
-
-# this doesn't treat the predictand as a factor 
-registerDoMC(cores = 4)
-test_mod <- cv.glmnet(regression_mat, regression_dat$v_thr, foldid = as.numeric(as.factor(regression_dat$region_name)), family = 'poisson', intercept = FALSE, standardize = FALSE, parallel = TRUE)
-test_mod
-plot(test_mod)
-
-coef(test_mod, s= "lambda.1se")
-
-```
 
 ```{r}
 # source https://stats.stackexchange.com/questions/479765/how-do-i-compare-cv-glmnet-models-with-aic
@@ -1255,14 +1266,14 @@ onsets %>%
 ```{r, fig.width = 10, fig.height=4.5}
 library(treemapify)
 
-anthromes_summary %>%
+global_summary %>%
   filter(year %in% c(1, 1000, 2000)) %>%
   mutate(year = paste(year, 'CE')) %>%
   ggplot(aes(area = as.numeric(area), fill  = class, label = class, subgroup = level)) +
   geom_treemap() +
   geom_treemap_subgroup_border(color = 'black') +
   facet_wrap(~year) +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome')  +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome')  +
   theme(legend.position  = 'bottom') +
   geom_treemap_subgroup_text(reflow = TRUE, fontface = 'italic', alpha = .8)
 
@@ -1270,43 +1281,25 @@ ggsave('figures/treeplot1.png', width = 10, height = 4.5)
 ```
 
 ```{r, fig.height=10, fig.width = 10}
-anthromes_summary %>%
+global_summary %>%
   filter(year %in% c(1700, 1800, 1900, 2000)) %>%
   mutate(year = paste(year, 'CE')) %>%
   ggplot(aes(area = as.numeric(area), fill  = class, label = class, subgroup = level)) +
   geom_treemap() +
   geom_treemap_subgroup_border(color = 'black') +
   facet_wrap(~year) +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome')  +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome')  +
   theme(legend.position  = 'bottom') +
   geom_treemap_subgroup_text(reflow = TRUE, fontface = 'italic', alpha = .8)
 
 ggsave('figures/treeplot2.png', width = 10, height = 10)
 ```
 
-## Alluvial plots
-
-```{r}
-library(ggalluvial)
-test <- anthromes_dat %>% 
-  filter(year %in% c(0, 500, 1000, 1500, 2000)) %>%
-  left_join(anthrome_key)
-
-ggplot(test, aes(x = as.factor(year), stratum = level, fill = level, label = level, alluvium = interaction(x,y), y = as.numeric(area))) +
-  geom_flow() +
-  geom_stratum(alpha = .5) +
-  scale_fill_manual(values = anthrome_level_color, name = 'Anthrome')  +
-  theme(legend.position  = 'bottom') +
-  geom_text(stat = 'stratum', size = 3) +
-  theme_minimal()
-```
-
-
 ## Correlograms
 
 ```{r}
 library(corrplot)
-periods <- anthromes_summary %>%
+periods <- global_summary %>%
   group_by(period) %>%
   nest
 
@@ -1376,7 +1369,7 @@ a <- bind_rows(contemp %>%
          var = factor(var, levels =  rev(c('Likely Natural', 'Potential Natural', 'Potential Modified', 'Likely Modified', 'Large Wild Areas', 'Shared Lands', 'Cities and Farms', 'All Lands',  'Indigenous Lands', 'Protected Lands', 'Key Biodiversity Areas')))) %>%
   ggplot(aes(var, n, fill = level)) +
   geom_col(position = 'fill') +
-  scale_fill_manual(values = anthrome_level_color, name = NULL) +
+  scale_fill_manual(values = anthrome_colors, name = NULL) +
   scale_y_continuous(labels = scales::percent_format(accuracy = 1)) +
   facet_wrap(~type, ncol = 1, scales = 'free_y') +
   labs(y = 'Percent total in each anthrome level', x = NULL) +
@@ -1398,7 +1391,7 @@ contemp %>%
   geom_boxplot(outlier.size = .1, outlier.alpha = .05, lwd = .3) +
   facet_wrap(~key, scales = 'free_x', ncol = 1) +
   theme_classic() +
-  scale_fill_manual(values = anthrome_level_color, name = NULL) +
+  scale_fill_manual(values = anthrome_colors, name = NULL) +
   labs( x = NULL, y = 'Distribution across anthrome levels') +
   theme(axis.line.y = element_blank(), axis.ticks.y = element_blank(), strip.background = element_blank(), axis.text.y = element_blank(), legend.position = 'none', panel.grid.minor = element_blank(), panel.grid.major.y = element_blank())  +
   coord_flip()
@@ -1422,7 +1415,7 @@ map_dat <-  an12_dgg_inputs %>%
 
 ggplot(map_dat) +
   geom_sf(aes(fill = class), color = NA) +
-  scale_fill_manual(values = anthrome_class_color)  +
+  scale_fill_manual(values = anthrome_colors)  +
   theme_bw() +
   theme(legend.position = 'NONE') +
   coord_sf(crs = st_crs("+proj=eck4"))
