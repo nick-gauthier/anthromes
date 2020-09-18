@@ -218,9 +218,20 @@ bind_cols(contemp_vars, nmh_tibble) %>%
 bind_cols(contemp_vars, nmh_tibble) %>%
   st_crop(st_bbox(c(xmin = 10, xmax = 40, ymin = 30, ymax = 50))) %>% # comment out for whole world
   ggplot() +
-  geom_sf(aes(fill = nmh_4), color = NA) +
-  scale_fill_viridis_c() +
+  geom_sf(aes(fill = nmh_34 > .2), color = NA) +
+  scale_fill_viridis_d() +
   coord_sf(crs = st_crs("+proj=eck4"))
+```
+Saving to shapefile messes with some of the variables names so this is necessary. shouldn't be though . . .
+```{r}
+contemp_vars <- read_sf('contemp_vars.shp') %>%
+  mutate(pa = pa_km2 >= land_ar, ind = ind_cnt >= land_ar, kba = kba_km2 >= land_ar, pa50 = pa_km2 >= (0.5 * land_ar), ind50 = ind_cnt >= (0.5 * land_ar), kba50 = kba_km2 >= (0.5 * land_ar), v_rich = round(v_rich), v_thr = round(v_thr), hfp_max = round(hfp_max))
+```
+saving data out
+```{r}
+contemp_vars %>% select(id, nmh, nmh_4, nmh_34) %>% rename(nmh_mode = nmh, nmh_4_frac = nmh_4, nmh_34_frac = nmh_34) %>%
+  mutate(nmh_3_frac = nmh_34_frac - nmh_4_frac) %>%
+  write_csv('nmh_natural_fraction.csv')
 ```
 
 
@@ -273,4 +284,5 @@ biome_summary %>%
 
 ggsave('anthromes_summary_forested_biomes.png', height = 12, width = 11)
 ```
+
 
