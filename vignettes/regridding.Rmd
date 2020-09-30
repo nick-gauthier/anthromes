@@ -12,6 +12,7 @@ library(sf)
 library(exactextractr)
 library(fasterize)
 library(tidyverse)
+devtools::load_all()
 ```
 
 
@@ -40,7 +41,7 @@ dgg_ids <- dgg_land$id
 saveRDS(dgg_ids, 'dgg_ids')
 ```
 
-
+Loop through each variable name, import the HYDE rasters from each year, brick, and extract by dgg cells.
 ```{r}
 hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
 
@@ -55,16 +56,14 @@ hyde2dgg <- function(hyde_varname, hyde_path){
   )
 }
 
-
 hyde_dgg <- hyde_names %>%
-  map(hyde2dgg, '~/Downloads/HYDE/hyde32_output') %>%
+  map(hyde2dgg, '~/Downloads/baseline/zip') %>%
   bind_cols()
 ```
 
 ```{r}
 saveRDS(hyde_dgg, 'hyde_dgg')
 ```
-
 
 
 ```{r}
@@ -104,6 +103,7 @@ hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 
 
 var_names <- names(hyde_dgg) %>%
   str_extract(hyde_names_grepl)
+
 time_steps <- names(hyde_dgg) %>%
   str_sub(start = str_length(var_names) + 5) %>%
   str_remove('_')
@@ -113,15 +113,9 @@ new_names <- paste(var_names, time_steps, sep = '.')
 anthromes_dgg <- hyde_dgg %>%
     setNames(new_names) %>%
   mutate(id = dgg_ids) %>%
-  #pivot_longer(-id) %>%
-  split(1:100) %>%
+  split(1:200) %>%
   map_dfr(~gather(., key = 'name', value = 'value', -id) %>%
   separate(name, into = c('var', 'time_step'), sep = '[.]') %>%
- # mutate(var = str_extract(name, hyde_names),
-#         time_step =  str_sub(name, start = str_length(var) + 5),
- #        time_step = str_remove(time_step, '_')) %>% # the population files have an extra _ before the date
-  #dplyr::select(-name) %>%
-  #pivot_wider(names_from = var, values_from = value)
   spread(var, value) %>%
   left_join(fixed_inputs, by = 'id') %>%
   mutate(crops = cropland / area,
@@ -132,32 +126,43 @@ anthromes_dgg <- hyde_dgg %>%
             urban = uopp / area,
             used = urban + crops + grazing,
             .keep = 'unused') %>%
-  anthromes_classify()) %>%
-  spread(time_step, anthrome)
+  anthromes_classify()) #%>%
+## necassary to save ram, but not if run on cluster
+write_csv(anthromes_dgg, 'anthromes_dgg2.csv')
+gc()
+read_csv('anthromes_dgg2.csv') %>%
+  mutate(time_step = factor(time_step, levels = time_key$time_step)) %>%
+  arrange(id, time_step) %>%
+  spread(time_step, anthrome) %>%
+  write_csv('anthromes_dgg.csv')
 ```
+
+
 
 ```{r}
 write_csv(anthromes_dgg, 'anthromes_dgg.csv')
 ```
 
 ```{r}
-anthromes_dgg <- read_csv('anthromes_dgg.csv')
+anthromes_dgg <- read_csv('anthromes_dgg.csv', col_types = cols(.default = 'i'))
 ```
 
 ```{r}
-anthromes_dgg_shp <- left_join(dgg_land, anthromes_dgg, by = 'id')
+anthromes_dgg_shp <- anthromes_dgg %>%
+  mutate(geometry = dgg_land$geometry) %>%
+  st_as_sf() %>%
+  st_set_crs(4326)
   
 write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
 ```
 
 ```{r}
 ggplot(anthromes_dgg_shp) +
-  geom_sf(aes(fill = as.factor(`1200AD`)), color = NA)
+  geom_sf(aes(fill = as.factor(`1200AD`)), color = NA, lwd = .1)
 ```
 
 
-#####
-Create final masks and grids
+# Create final masks and grids
 ```{r, eval = FALSE}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 
@@ -205,7 +210,7 @@ an12_dgg_inputs %>%  st_set_crs(4326) %>% mutate(region = regions_dgg) %>% left_
   write_sf('an12_dgg_inputs.shp')
 ```
 
-# DGG from analysis script
+# DGG generation from analysis script
 ```{r}
 # construct the DGG
 dggs <- dgconstruct(res=12)
