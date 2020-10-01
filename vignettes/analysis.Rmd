@@ -1212,6 +1212,65 @@ cv_aicc(test_mod2)
 
 
 ## Onsets
+
+```{r}
+used_onset <- an12_dgg %>%
+    pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+    group_by(id) %>%
+    filter(anthrome <= 43) %>%
+    left_join(time_key) %>%
+    summarise(used_onset = min(year, na.rm = TRUE))
+
+change_type <- an12_dgg %>%
+    pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+      group_by(id) %>%
+  summarise(used = any(anthrome <= 43), seminatural = any(anthrome <= 54)) %>%
+  left_join(used_onset, by = 'id') %>%
+  mutate(class = case_when(used == TRUE & used_onset <= 1 ~'U0001', # fyi case when statement evaluates in order
+                            used == TRUE & used_onset <= 1500 ~ 'U1500',
+                            used == TRUE & used_onset <= 1850 ~ 'U1850',
+                            used == TRUE & used_onset <= 1950 ~ 'U1950',
+                            used == TRUE ~ 'RECNT',
+                            seminatural == TRUE ~ 'SEMI',
+                            TRUE  ~ 'NEVR')) %>%
+  left_join(an12_dgg_inputs, ., by = 'id') %>%
+  mutate(class_biome = if_else(pot_veg <= 8, paste0('W_', class), paste('N_', class))) %>%
+  select(id, land_area, class, class_biome, geometry)
+```
+
+```{r}
+change_type %>% count(class) %>% mutate(n = n / sum(n) * 100)
+```
+```{r}
+change_type %>%
+mutate(class = factor(class, levels = c( "NEVR" , "SEMI" , "U0001" ,"U1500","U1850" ,"U1950" ,"RECNT")))  %>%
+  st_as_sf() %>%
+ #    st_crop(st_bbox(c(xmin = 10, xmax = 50, ymin = 20, ymax = 50))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = class, geometry = geometry), color = NA, lwd = .1)+
+  scale_fill_viridis_d() +
+  theme_bw() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+```
+```{r}
+write_csv(change_type %>% st_drop_geometry(), 'change_type.csv')
+```
+
+
+```{r}
+change_type %>%
+  group_by(change) %>%
+  count() %>%
+  ungroup() %>%
+  mutate(test = n / sum(n) * 100)
+```
+
+
+```{r}
+anthrome_key
+```
+
+
 ```{r}
 suppressWarnings(
   onset_seminatural <- an12_dgg %>%
