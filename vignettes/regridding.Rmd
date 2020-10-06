@@ -19,6 +19,8 @@ devtools::load_all()
 
 ```{r}
 land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc')
+
+cellStats(land_area, sum)
 ```
 
 ```{r}
@@ -31,9 +33,9 @@ dgg_land <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp') %>%
 ```{r}
 write_sf(dgg_land, 'l12_ISEA3H_dgg_land.shp')
 ```
+perhpas separate above to dgg creation script?
 
-
-## all files
+# HYDE
 ```{r}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 dgg_ids <- dgg_land$id
@@ -59,12 +61,41 @@ hyde2dgg <- function(hyde_varname, hyde_path){
 hyde_dgg <- hyde_names %>%
   map(hyde2dgg, '~/Downloads/baseline/zip') %>%
   bind_cols()
+
+hyde_dgg_upper <- hyde_names %>%
+  map(hyde2dgg, '~/Downloads/upper/zip') %>%
+  bind_cols()
+
+hyde_dgg_lower <- hyde_names %>%
+  map(hyde2dgg, '~/Downloads/lower/zip') %>%
+  bind_cols()
+
+test <- suppressWarnings(list.files('~/Downloads/upper/zip/', recursive = TRUE, full.names = TRUE) %>%  str_subset(., 'cropland') %>% map(raster) %>% brick %>%`crs<-`(value = '+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0') %>%
+  exact_extract(dgg_land, 'sum'))
+
+# check that ncol(hyde_test) == length(hyde_names) * length(time_steps)
+
+hyde_dgg1 <- readRDS('hyde_dgg_upper')
+hyde_dgg1;test
+
+bind_cols(hyde_dgg1, test) %>%
+  select(!contains('...'))
+
+ncol(hyde_dgg1)
+
+#missing 32
+map(hyde_names, ~select(hyde_dgg1, contains(.)) %>% ncol)
+test2 <- select(hyde_dgg1, contains('cropland')) %>% names
+
+saveRDS(bind_cols(hyde_dgg1, select(test, !all_of(test2))), 'hyde_dgg_upper')
 ```
 
 ```{r}
 saveRDS(hyde_dgg, 'hyde_dgg')
+saveRDS(hyde_dgg_upper, 'hyde_dgg_upper')
+saveRDS(hyde_dgg_lower, 'hyde_dgg_lower')
 ```
-
+ move ^ to hyde script?
 
 ```{r}
 land_area_rast <- raster('data/raw_data/supporting_5m_grids/maxln_cr.tif')
@@ -91,12 +122,13 @@ does the tree map match what you get by thresholding the biomes later?
 ```{r}
 write_csv(fixed_inputs, 'fixed_inputs.csv')
 ```
-
 ```{r}
 dgg_ids <- readRDS('dgg_ids')
 fixed_inputs <- read_csv('fixed_inputs.csv') %>%
   mutate(id = dgg_ids)
+```
 
+```{r}
 hyde_dgg <- readRDS('hyde_dgg')
 
 hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
@@ -138,6 +170,93 @@ read_csv('anthromes_dgg2.csv') %>%
 ```
 
 
+```{r}
+hyde_dgg_upper <- readRDS('hyde_dgg_upper')
+
+hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
+
+var_names <- names(hyde_dgg_upper) %>%
+  str_extract(hyde_names_grepl)
+
+time_steps <- names(hyde_dgg_upper) %>%
+  str_sub(start = str_length(var_names) + 5) %>%
+  str_remove('_')
+
+new_names <- paste(var_names, time_steps, sep = '.')
+
+anthromes_dgg_upper <- hyde_dgg_upper %>%
+  setNames(new_names) %>%
+  mutate(id = dgg_ids) %>%
+  # split into shards to save memory
+  split(1:200) %>%
+  map_dfr(~gather(., key = 'name', value = 'value', -id) %>%
+  separate(name, into = c('var', 'time_step'), sep = '[.]') %>%
+  spread(var, value) %>%
+  left_join(fixed_inputs, by = 'id') %>%
+  mutate(crops = cropland / area,
+            grazing = grazing / area,
+            rice = ir_rice / area,
+            pop = popc / area,
+            irrigation = tot_irri / area,
+            urban = uopp / area,
+            used = urban + crops + grazing,
+            .keep = 'unused') %>%
+    anthromes_classify()) #%>%
+## necessary to save ram, but not if run on cluster
+write_csv(anthromes_dgg_upper, 'anthromes_dgg_upper2.csv')
+gc()
+read_csv('anthromes_dgg_upper2.csv') %>%
+  mutate(time_step = factor(time_step, levels = time_key$time_step)) %>%
+  arrange(id, time_step) %>%
+  spread(time_step, anthrome) %>%
+  write_csv('anthromes_dgg_upper.csv')
+```
+
+
+
+```{r}
+hyde_dgg_lower <- readRDS('hyde_dgg_lower')
+
+hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
+
+var_names <- names(hyde_dgg_lower) %>%
+  str_extract(hyde_names_grepl)
+
+time_steps <- names(hyde_dgg_lower) %>%
+  str_sub(start = str_length(var_names) + 5) %>%
+  str_remove('_')
+
+new_names <- paste(var_names, time_steps, sep = '.')
+
+anthromes_dgg_lower <- hyde_dgg_lower %>%
+    setNames(new_names) %>%
+  mutate(id = dgg_ids) %>%
+  split(1:200) %>%
+  map_dfr(~gather(., key = 'name', value = 'value', -id) %>%
+  separate(name, into = c('var', 'time_step'), sep = '[.]') %>%
+  spread(var, value) %>%
+  left_join(fixed_inputs, by = 'id') %>%
+  mutate(crops = cropland / area,
+            grazing = grazing / area,
+            rice = ir_rice / area,
+            pop = popc / area,
+            irrigation = tot_irri / area,
+            urban = uopp / area,
+            used = urban + crops + grazing,
+            .keep = 'unused') %>%
+  anthromes_classify()) #%>%
+## necassary to save ram, but not if run on cluster
+write_csv(anthromes_dgg_lower, 'anthromes_dgg_lower2.csv')
+gc()
+read_csv('anthromes_dgg_lower2.csv') %>%
+  mutate(time_step = factor(time_step, levels = time_key$time_step)) %>%
+  arrange(id, time_step) %>%
+  spread(time_step, anthrome) %>%
+  write_csv('anthromes_dgg_lower.csv')
+```
+
+
+
 
 ```{r}
 write_csv(anthromes_dgg, 'anthromes_dgg.csv')
@@ -157,8 +276,9 @@ write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
 ```
 
 ```{r}
-ggplot(anthromes_dgg_shp) +
-  geom_sf(aes(fill = as.factor(`1200AD`)), color = NA, lwd = .1)
+ggplot(filter(anthromes_dgg_shp, id < 200000)) +
+  geom_sf(aes(fill = as.factor(`1200AD`)), color = NA, lwd = .1) +
+  coord_sf(crs = st_crs("+proj=eck4"))
 ```
 
 
@@ -178,22 +298,25 @@ an12_fixed_inputs <- dgg_land %>%
   filter(id %in% land_mask) %>% 
   left_join(fixed_inputs) %>%
   select(id, land_area, pot_veg, pot_vill, geometry) %>%
-    st_set_crs(4326)
-
-an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')
-an12_dgg <- read_csv('anthromes_dgg.csv') %>%
-  filter(id %in% an12_dgg_inputs$id)%>%
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(time_key) %>%
-  #filter(year <= 2000) %>%
-  arrange(id, year, anthrome) %>%
-  mutate(id = as.integer(id), anthrome = as.integer(anthrome)) %>%
-  select(-year) %>%
-  pivot_wider(names_from = time_step, values_from = anthrome)
+    st_set_crs(4326) # might not be necessary with s2?
 
 write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
+```
+
+```{r}
+an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')
+an12_dgg <- read_csv('anthromes_dgg.csv', col_types = cols(.default = 'i')) %>%
+  filter(id %in% an12_dgg_inputs$id)
+
 write_csv(an12_dgg, 'an12_dgg.csv')
 
+read_csv('anthromes_dgg_lower.csv', col_types = cols(.default = 'i')) %>%
+  filter(id %in% an12_dgg_inputs$id) %>%
+  write_csv('an12_dgg_lower.csv')
+
+read_csv('anthromes_dgg_upper.csv', col_types = cols(.default = 'i')) %>%
+  filter(id %in% an12_dgg_inputs$id) %>%
+  write_csv('an12_dgg_upper.csv')
 
 an12_dgg_inputs %>% dplyr::select(id) %>%
   left_join(an12_dgg) %>%
