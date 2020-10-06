@@ -44,7 +44,7 @@ contemp_vars <- read_sf('contemp_vars.shp') %>%
 
 # Anthrome Trajectory Summaries
 
-Summary of of global land area for each anthrome.
+Summary of of global land area for each Anthrome.
 ```{r}
 global_summary <- an12_dgg_long %>% anthrome_trajectory()
 regional_summary <- an12_dgg_long %>% anthrome_trajectory(by = region_name)
@@ -238,8 +238,6 @@ hyde_pop_biomes <- hyde_pop %>%
 ```
 
 
-
-
 # Anthrome Legacies
 
 Prepare a data frame for regression.
@@ -269,7 +267,7 @@ Explore the distributions of key variables.
 hist(contemp_vars$ind_cnt)
 hist(contemp_vars$pa_km2)
 hist(contemp_vars$kba_km2)
-hist(contemp_vars$max)
+hist(contemp_vars$hfp_max)
 hist(contemp_vars$v_rich)
 hist(contemp_vars$v_thr)
 hist(contemp_vars$nmh_34)
@@ -283,18 +281,9 @@ calc_aic <- function(predictand, predictor, fam, dat){
     glm(family = fam, data = dat) %>% 
     AIC
 }
-
-calc_aic_gam <- function(predictand, predictor, fam, dat){
-  as.formula(paste(predictand, '~', predictor, '+ te(lon,lat)')) %>%
-    bam(family = fam, data = dat) %>% 
-    AIC
-}
 ```
 
-
-How well do the modern anthromes predict these variables compared to the max human footprint. The order is class -> level -> hfp_max for all of these except for ind50, which is hfp -> class -> level. Repeating for 100 threshold for the logistic regression, kba is the same but pa and ind have class -> hfp -> level.
-
-so in all cases bug ind50 the classes are better than the hfp. in all cases but ind50, ind, and pa are the levels better than hfp
+How well do the modern anthromes predict these variables compared to the max human footprint? The order is class -> level -> hfp_max for all of these except for ind50, which is hfp -> class -> level. Repeating for 100 threshold for the logistic regression, kba is the same but pa and ind have class -> hfp -> level. In all cases bug ind50 the classes are better than the hfp. In all cases but ind50, ind, and pa are the levels better than hfp.
 
 ```{r}
 pres_pred1 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
@@ -317,32 +306,20 @@ pres_pred3 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
 ```
 
 
-Fit a global GLM and one limited to natural areas.
+Fit a global GLM and one limited to natural areas and protected areas.
 
 ```{r}
-global_legacy_glm1 <- expand_grid(time_step = unique(c(time_steps_millennia, 
-                                                       time_steps_centuries)),
-                                  predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors =  paste0('an_', time_step),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = regression_dat))
-
-global_legacy_glm2 <- expand_grid(time_step = unique(c(time_steps_millennia, 
-                                                       time_steps_centuries)),
-                                  predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(predictors =  paste0('an_', time_step),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = regression_dat))
-
-global_legacy_glm1_nmh34 <- expand_grid(time_step = unique(c(time_steps_millennia, 
-                                                             time_steps_centuries)),
-                                        predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
-  mutate(predictors =  paste0('an_', time_step),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = filter(regression_dat, nmh_34 > 0.5)))
-
-global_legacy_glm2_nmh34 <- expand_grid(time_step = unique(c(time_steps_millennia, 
-                                                             time_steps_centuries)),
-                                        predictands = c('kba50', 'ind50', 'pa50')) %>%
-  mutate(predictors =  paste0('an_', time_step),
-         aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = filter(regression_dat, nmh_34 > 0.5)))
+legacy_mods <- expand_grid(time_step = unique(c(time_steps_millennia, 
+                                                time_steps_centuries)),
+                           predictands = c('kba50', 'v_thr', 'v_rich')) %>%
+  mutate(predictors = paste0('an_', time_step),
+         fam = if_else(predictands == 'kba50', 'binomial', 'poisson'),
+         global_aic = pmap_dbl(list(predictands, predictors, fam), 
+                        calc_aic, dat = regression_dat),
+         nmh_aic = pmap_dbl(list(predictands, predictors, fam), 
+                        calc_aic, dat = filter(regression_dat, nmh_34 > 0.5)),
+         pa_aic = pmap_dbl(list(predictands, predictors, fam), 
+                        calc_aic, dat = filter(regression_dat, pa50 == TRUE)))
 ```
 
 # Figures
