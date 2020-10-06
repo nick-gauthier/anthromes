@@ -23,10 +23,18 @@ an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp') %>%
   rename(land_area = land_ar, pot_vill = pot_vll, region_name = regn_nm) %>%
   mutate(region_name = if_else(region_name == 'Latin America', 'Latin America and Caribbean', region_name))
 
-an12_dgg <- read_csv('an12_dgg.csv')
+an12_dgg <- read_csv('an12_dgg.csv', col_types = cols(.default = 'i')) %>%
+  dplyr::select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) # remove annual data 
+
+an12_dgg_long <- an12_dgg %>% 
+  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>% 
+    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% # but join to biome key
+  select(-pot_vill, -pot_veg) %>%
+  pivot_longer(-c(id, land_area, biome, region_name), names_to = 'time_step', values_to = 'anthrome') 
 
 total_land_area <- sum(an12_dgg_inputs$land_area)
 
+#contemp vars doesn't need to be an sf object here?
 contemp_vars <- read_sf('contemp_vars.shp') %>%
   mutate(pa = pa_km2 >= land_ar, ind = ind_cnt >= land_ar, kba = kba_km2 >= land_ar, 
          pa50 = pa_km2 >= (0.5 * land_ar), ind50 = ind_cnt >= (0.5 * land_ar), 
@@ -36,30 +44,132 @@ contemp_vars <- read_sf('contemp_vars.shp') %>%
 
 # Anthrome Trajectory Summaries
 
-## Global Summary
-
-Summary proportion of global land area for each anthrome.
+Summary of of global land area for each anthrome.
 ```{r}
-global_summary <- an12_dgg %>% 
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  select(-pot_veg, -pot_vill, -region_name) %>%
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
-  mutate(anthrome= as.factor(anthrome)) %>%
-  count(time_step, anthrome, wt = land_area, name = 'land_area', .drop = FALSE) %>%
-  mutate(percent_land_area = land_area / total_land_area,
-         anthrome = as.numeric(as.character(anthrome))) %>%
-  left_join(anthrome_key, by = 'anthrome') %>%
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  arrange(year, anthrome) %>%
-  select(time_step, anthrome, class, percent_land_area, period, year)
+global_summary <- an12_dgg_long %>% anthrome_trajectory()
+regional_summary <- an12_dgg_long %>% anthrome_trajectory(by = region_name)
+biome_summary <- an12_dgg_long %>% anthrome_trajectory(by = biome)
 ```
 
+## Conservation Summary
 
-Get hyde population data.
+Do the same thing for conservation and biodiversity variables. Note the distinction between the filtered variables and the summed ones which makes the preprocessing more complex.
+```{r}
+kba_summary <- contemp_vars %>%
+  select(id, kba_km2) %>%
+  rename(land_area = kba_km2) %>%
+  st_drop_geometry() %>%
+  remove_missing() %>%
+ left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Key Biodiversity Areas')
+
+unused_summary <- contemp_vars %>%
+  select(id, land_ar) %>%
+  st_drop_geometry() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  filter(`2017AD` >= 50)  %>% # unused lands in 2017
+  select(id, land_ar) %>%
+    rename(land_area = land_ar) %>%
+  remove_missing() %>%
+   left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+    mutate(var = 'Seminatural and Wildlands (2017)')
+  
+nmh3_summary <- contemp_vars %>%
+  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
+  select(id, nmh3_km2) %>%
+  st_drop_geometry() %>%
+    rename(land_area = nmh3_km2) %>%
+   left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Potential Natural (NMH)')
+
+nmh4_summary <- contemp_vars %>%
+  mutate(nmh4_km2 = nmh_4 * land_ar) %>%
+  select(id, nmh4_km2) %>%
+  st_drop_geometry() %>%
+  rename(land_area = nmh4_km2) %>%
+   left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Likely Natural (NMH)')
+
+shared_3gc_summary <- contemp_vars %>%
+  filter(X_3_c_4 == 2) %>%
+  select(id, land_ar) %>%
+  st_drop_geometry() %>%
+  rename(land_area = land_ar) %>%
+   left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Shared Lands (3GC)')
+
+wild_3gc_summary <- contemp_vars %>%
+  filter(X_3_c_4 == 3) %>%
+  select(id, land_ar) %>%
+  st_drop_geometry() %>%
+  rename(land_area = land_ar) %>%
+   left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Large Wild Areas (3GC)')
+
+contemp_summary <- bind_rows(kba_summary, unused_summary, 
+                             nmh3_summary, nmh4_summary, 
+                             shared_3gc_summary, wild_3gc_summary) %>%
+  # make sure they plot in the right order
+  mutate(var = factor(var, levels = c('Key Biodiversity Areas', 'Seminatural and Wildlands (2017)', 
+                                        'Potential Natural (NMH)',  'Likely Natural (NMH)', 
+                                        'Shared Lands (3GC)', 'Large Wild Areas (3GC)')))
+```
+
+## Save summary files
+
+```{r}
+global_summary %>% 
+  select(-period, -year) %>% 
+  pivot_wider(id_cols = class, names_from = time_step, values_from = percent_land_area) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(class, level, type, any_of(time_steps_ordered)) %>%
+  write_csv('data/derived_data/an12_dgg_summary_global.csv')
+
+region_summary %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(class, region_name), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(region_name, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(region_name, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_region.csv')
+
+biome_summary %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(biome, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(biome, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(biome, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_biomes.csv')
+
+contemp_summary %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(var, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(var, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(var, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_contemp.csv')
+```
+
+# HYDE Population Curves
+
+
+Get HYDE population data.
 ```{r}
 hyde_pop <- readRDS('hyde_dgg') %>%
   select(contains('popc')) %>%
@@ -82,26 +192,6 @@ hyde_pop_all <- hyde_pop %>%
   left_join(time_key)
 ```
 
-## Regional Summary
-```{r}
-region_summary <- an12_dgg %>% 
-  mutate(region_name = an12_dgg_inputs$region_name, land_area = an12_dgg_inputs$land_area) %>% 
-  pivot_longer(-c(id, land_area, region_name), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(time_step, region_name, land_area, class) %>%
-  count(time_step, class, region_name, wt = land_area, name = 'land_area') %>% # add .drop = FALSE to preserve all levels
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  group_by(region_name, time_step) %>%
-  mutate(percent_land_area = land_area / sum(land_area)) %>%
-  ungroup() %>%
-  select(time_step, region_name, class, percent_land_area, period, year)
-```
-
-
 ```{r}
 hyde_pop_regions <- hyde_pop %>%
   left_join(an12_dgg_inputs, by = 'id') %>% 
@@ -123,28 +213,6 @@ hyde_pop_regions <- hyde_pop %>%
   left_join(time_key)
 ```
 
-## Biome Summary
-
-```{r}
-biome_summary <- an12_dgg %>% 
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  select(-pot_vill, -region_name) %>%
-  left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
-  select(-pot_veg) %>%
-  pivot_longer(-c(id, land_area, biome), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key) %>%
-  select(land_area, class, biome, time_step) %>%
-  count(time_step, class, biome, wt = land_area, name = 'land_area', .drop = FALSE) %>%
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  group_by(biome, time_step) %>%
-  mutate(percent_land_area = land_area / sum(land_area)) %>%
-  ungroup() %>%
-  select(time_step, biome, class, percent_land_area, period, year)
-```
 
 ```{r}
 hyde_pop_biomes <- hyde_pop %>%
@@ -169,275 +237,6 @@ hyde_pop_biomes <- hyde_pop %>%
   filter(biome != 'Ice, snow') %>% left_join(time_key)
 ```
 
-## Conservation Summary
-
-
-```{r}
-unused_summary <- contemp_vars %>%
-  select(id, land_ar) %>%
-  st_drop_geometry() %>%
-  remove_missing() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  filter(`2017AD` >= 50)  %>% # unused lands in 2017
-  pivot_longer(-c(id, land_ar), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, land_ar, class) %>%
-  count(time_step, class, wt = land_ar, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-ind_summary <- contemp_vars %>%
-  select(id, ind_cnt) %>%
-  st_drop_geometry() %>%
-  remove_missing() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, ind_cnt), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, ind_cnt, class) %>%
-  count(time_step, class, wt = ind_cnt, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-kba_summary <- contemp_vars %>%
-  select(id, kba_km2) %>%
-  st_drop_geometry() %>%
-  remove_missing() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, kba_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, kba_km2, class) %>%
-  count(time_step, class, wt = kba_km2, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-pa_summary <- contemp_vars %>%
-  select(id, pa_km2) %>%
-  st_drop_geometry() %>%
-  remove_missing() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, pa_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, pa_km2, class) %>%
-  count(time_step, class, wt = pa_km2, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-nmh4_summary <- contemp_vars %>%
-  mutate(nmh4_km2 = nmh_4 * land_ar) %>%
-  select(id, nmh4_km2) %>%
-  st_drop_geometry() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, nmh4_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, nmh4_km2, class) %>%
-  count(time_step, class, wt = nmh4_km2, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-nmh3_summary <- contemp_vars %>%
-  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
-  select(id, nmh3_km2) %>%
-  st_drop_geometry() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, nmh3_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, nmh3_km2, class) %>%
-  count(time_step, class, wt = nmh3_km2, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-nmh3_summary <- contemp_vars %>%
-  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
-  select(id, nmh3_km2) %>%
-  st_drop_geometry() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, nmh3_km2), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, nmh3_km2, class) %>%
-  count(time_step, class, wt = nmh3_km2, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-shared_3gc_summary <- contemp_vars %>%
-  filter(X_3_c_4 == 2) %>%
-  select(id, land_ar) %>%
-  st_drop_geometry() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_ar), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, land_ar, class) %>%
-  count(time_step, class, wt = land_ar, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-wild_3gc_summary <- contemp_vars %>%
-  filter(X_3_c_4 == 3) %>%
-  select(id, land_ar) %>%
-  st_drop_geometry() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_ar), names_to = 'time_step', values_to = 'anthrome') %>%
-  left_join(anthrome_key, by = 'anthrome') %>% 
-  select(id, time_step, land_ar, class) %>%
-  count(time_step, class, wt = land_ar, name = 'var', .drop = FALSE) %>% 
-  left_join(time_key, by = 'time_step') %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  select(time_step, class, var, period, year)
-
-contemp_summary <- bind_rows(kba_summary,pa_summary, ind_summary, unused_summary, nmh3_summary, nmh4_summary, shared_3gc_summary, wild_3gc_summary, .id = 'type') %>%
-  mutate(type = factor(case_when(type == 1 ~ 'Key Biodiversity Areas',
-                                 type == 2 ~ 'Protected Areas',
-                                 type == 3 ~ 'Indigenous Lands',
-                                 type == 4 ~ 'Seminatural and Wildlands (2017)',
-                                 type == 5 ~ 'Potential Natural (NMH)',
-                                 type == 6 ~ 'Likely Natural (NMH)',
-                                 type == 7 ~ 'Shared Lands (3GC)',
-                                 type == 8 ~ 'Large Wild Areas (3GC)'), levels = c('Key Biodiversity Areas','Protected Areas', 'Indigenous Lands', 'Seminatural and Wildlands (2017)', 'Potential Natural (NMH)',  'Likely Natural (NMH)', 'Shared Lands (3GC)', 'Large Wild Areas (3GC)')))
-```
-
-### Save summary files
-
-```{r}
-global_summary %>% 
-  select(-period, -anthrome, -year) %>% 
-  pivot_wider(id_cols = c(class), names_from = time_step, values_from = percent_land_area) %>%
-  mutate(across(everything(), ~replace_na(.x, 0))) %>%
-  left_join(anthrome_key) %>%
-  select(class, level, type, any_of(time_steps_ordered)) %>%
-  write_csv('data/derived_data/an12_dgg_summary_global.csv')
-
-region_summary %>%
-  select(-period, -year) %>%
-  pivot_wider(id_cols = c(class, region_name), names_from = time_step, values_from = percent_land_area) %>%
-  arrange(region_name, class) %>%
-  left_join(anthrome_key) %>%
-  select(region_name, class, level, type, any_of(time_steps_ordered)) %>%
-  mutate(across(everything(), ~replace_na(.x, 0))) %>%
-  write_csv('data/derived_data/an12_dgg_summary_region.csv')
-
-biome_summary %>%
-  select(-period, -year) %>%
-  pivot_wider(id_cols = c(biome, class), names_from = time_step, values_from = percent_land_area) %>%
-  arrange(biome, class) %>%
-  left_join(anthrome_key) %>%
-  select(biome, class, level, type, any_of(time_steps_ordered)) %>%
-  mutate(across(everything(), ~replace_na(.x, 0))) %>%
-  write_csv('data/derived_data/an12_dgg_summary_biomes.csv')
-
-contemp_summary %>%
-  select(-period, -year) %>%
-  pivot_wider(id_cols = c(type, class), names_from = time_step, values_from = var) %>%
-  arrange(type, class) %>%
-  rename(var = type) %>%
-  left_join(anthrome_key) %>%
-  select(var, class, level, type, any_of(time_steps_ordered)) %>%
-  mutate(across(everything(), ~replace_na(.x, 0))) %>%
-  write_csv('data/derived_data/an12_dgg_summary_contemp.csv')
-```
-
-```{r}
-an12_dgg %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  filter(anthrome == 61) %>%
-  group_by(id) %>%
-  count %>%
-  filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  pull(land_area) %>%
-  sum %>%
-  `/`(total_land_area)%>%
-  `*`(100)
-
-an12_dgg %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  filter(anthrome == 62) %>%
-  group_by(id) %>%
-  count %>%
-  filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  pull(land_area) %>%
-  sum %>%
-  `/`(total_land_area)%>%
-  `*`(100)
-
-an12_dgg %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  filter(anthrome == 63) %>%
-  group_by(id) %>%
-  count %>%
-  filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  pull(land_area) %>%
-  sum %>%
-  `/`(total_land_area) %>%
-  `*`(100)
-######################
-
-an12_dgg_inputs %>%
-  st_drop_geometry() %>%
-  mutate(woodland = if_else(pot_veg <= 8, 'woodland', 'bare')) %>%
-  group_by(woodland) %>%
-  count(wt = land_area, name = 'area')
-
-an12_dgg %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  filter(anthrome == 61) %>%
-  group_by(id) %>%
-  count %>%
-  filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  pull(land_area) %>%
-  sum %>%
-  `/`(55432294)%>%
-  `*`(100)
-
-an12_dgg %>% 
-  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-  filter(anthrome == 62) %>%
-  group_by(id) %>%
-  count %>%
-  filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
-  pull(land_area) %>%
-  sum %>%
-  `/`(76287578)%>%
-  `*`(100)
-
-```
 
 
 
