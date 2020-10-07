@@ -319,41 +319,52 @@ legacy_mods <- expand_grid(time_step = unique(c(time_steps_millennia,
          nmh_aic = pmap_dbl(list(predictands, predictors, fam), 
                         calc_aic, dat = filter(regression_dat, nmh_34 > 0.5)),
          pa_aic = pmap_dbl(list(predictands, predictors, fam), 
-                        calc_aic, dat = filter(regression_dat, pa50 == TRUE)))
+                        calc_aic, dat = filter(regression_dat, pa50 == TRUE)),
+          ind_aic = pmap_dbl(list(predictands, predictors, fam), 
+                        calc_aic, dat = filter(regression_dat, ind50 == TRUE))) %>%
+  pivot_longer(global_aic:ind_aic) %>%
+  group_by(predictands, name) %>%
+  mutate(aic_scaled = scales::rescale(value)) %>%
+  ungroup()
 ```
 
 # Figures
 
-```{r}
-# setup legends for plotting
-# custom function while bug remains in ggplot due to new graphics engine
-image_ggplot <- function(image, interpolate = FALSE) { info <- magick::image_info(image) 
-ggplot2::ggplot(data.frame(x = 0, y = 0), ggplot2::aes_string('x', 'y')) + ggplot2::geom_blank() + ggplot2::theme_void() + ggplot2::coord_fixed(expand = FALSE, xlim = c(0, info$width), ylim = c(0, info$height)) + ggplot2::annotation_raster(image, 0, info$width, info$height, 0, interpolate = interpolate) + NULL 
-}
-legend_long <- image_ggplot(magick::image_read("legend_long.png"))
-legend_wide <- image_ggplot(magick::image_read("legend_wide.png"))
-
-addSmallLegend <- function(myPlot, pointSize = 3, textSize = 8, spaceLegend = .8) {
-  myPlot +
-    guides(shape = guide_legend(override.aes = list(size = pointSize)),
-           color = guide_legend(override.aes = list(size = pointSize))) +
-    theme(legend.text  = element_text(size = textSize),
-          legend.key.size = unit(spaceLegend, "lines"))
-}
-```
-
 ## Figure 1 - Global Summary
 
 ```{r, fig.width=9, fig.height=3.5}
-global_plot <- anthromes_summary %>%
+# global_types <- global_summary %>%
+#       filter(class != 'Ice') %>%
+#   group_by(type, time_step) %>%
+#   summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
+#   pivot_wider(c(time_step, period), names_from = type, values_from = percent_land_area) %>%
+#   mutate(Seminatural = Wild + Seminatural) %>% # to match the stacked bar plot
+#   select(time_step, Wild, Seminatural, period) %>%
+#   pivot_longer(Wild:Seminatural, names_to = 'type', values_to = 'percent_land_area') %>%
+#       mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+#   arrange(time_step)
+
+global_types <- global_summary %>%
+  left_join(anthrome_key) %>%
+  group_by(type, time_step) %>%
+  summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
+    mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  arrange(time_step) %>%
+  filter(type != 'Used') %>%
+  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+
+global_plot <- global_summary %>%
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter(class != 'Ice') %>%
   ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
-  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
-  geom_line(data = hyde_pop_all, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1) +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  geom_step(data = global_types, aes(group = type, color = type), position = 'stack', direction = 'mid', size = 2) +
+  #geom_area(data = global_types, aes(group = type), color = 'black', size = .6, fill= NA) +
+  #geom_line(data = global_types, aes(group = type), color = 'black', size = .6, alpha = .7) +
+    geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  geom_line(data = hyde_pop_all, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1, size = .8) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
   facet_grid(~period, scales = 'free_x', space = 'free') +
   theme_classic() +
   scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
@@ -361,22 +372,60 @@ global_plot <- anthromes_summary %>%
                    labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land area') +
   theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+global_plot
 ```
 
 
 ## Figure 2 - Regional Summary
+```{r}
+# maybe use this to get nested color legends?
+devtools::install_github("clauswilke/relayer")
+library(relayer)
+```
+
 
 ```{r, fig.width = 9, fig.height = 8}
+region_types <- region_summary %>%
+  left_join(anthrome_key) %>%
+  group_by(type, time_step, region_name) %>%
+  summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
+    mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  arrange(time_step) %>%
+  filter(type != 'Used') %>%
+  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+
+region_plot <- region_summary %>% 
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+    geom_step(data = region_types, aes(group = type, color = type), position = 'stack', direction = 'mid', size = 1.5, show_guide = FALSE) +
+  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
+  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  #  geom_area(data = region_types, aes(group = type), color = 'black', fill = NA, position = 'fill', size = .4) +
+  geom_line(data = hyde_pop_regions, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1, size = .7) +
+  facet_wrap(~region_name, ncol = 2) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, guide = FALSE) +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land area') +
+  theme(strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+addSmallLegend(region_plot) + guides(color = FALSE)
+
 region_plot <- region_summary %>% 
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), width = .8, size = .1)+
   geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
   geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
-  geom_line(data = hyde_pop_regions, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1) +
+  geom_line(data = hyde_pop_regions, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1, size = .7) +
   facet_wrap(~region_name, ncol = 2) +
-  scale_fill_manual(values = anthrome_class_color, name = 'Anthrome') +
-  scale_color_manual(values = anthrome_class_color, name = 'Anthrome') +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
   theme_classic() +
   scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
   scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
@@ -387,14 +436,32 @@ region_plot <- region_summary %>%
 addSmallLegend(region_plot)
 ```
 
+again, with a different legend
+```{r fig.width = 11, fig.height = 9}
+region_plot + legend_long + plot_layout(widths =c(2,1))  &theme(legend.position = 'none')
+```
+
+
 ## Figure 3 - Biome summary
 
 ```{r fig.width = 9, fig.height = 8}
+biome_types <- biome_summary %>%
+  left_join(anthrome_key) %>%
+  filter(biome != 'Ice, snow') %>%
+  group_by(type, time_step, biome) %>%
+  summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
+    mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  arrange(time_step) %>%
+  filter(type != 'Used') %>%
+  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+
 biome_plot <- biome_summary %>% 
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter( class != 'NODATA', class != 'Ice', biome != 'Ice, snow') %>%
   ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+  geom_step(data = biome_types, aes(group = type, color = type), 
+            position = 'stack', direction = 'mid', size = 1.5, show_guide = FALSE) +
   geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
   geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
   geom_line(data = hyde_pop_biomes, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1) +
@@ -408,21 +475,33 @@ biome_plot <- biome_summary %>%
   labs(x = 'Year', y = 'Percent land surface') +
   theme(strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
 
-addSmallLegend(biome_plot)
+addSmallLegend(biome_plot) + guides(color = FALSE)
 ```
 
 ## Figure 4 - Contemporary Data
 
 ```{r}
+contemp_types <- contemp_summary %>%
+  rename(cons_type = type) %>%
+  left_join(anthrome_key) %>%
+  group_by(type, time_step, cons_type) %>%
+  mutate(var = var / total_land_area) %>%
+  summarise(var = sum(var), period = unique(period)) %>%
+    mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  arrange(time_step) %>%
+  filter(type != 'Used') %>%
+  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+
 contemp_plot <- contemp_summary %>%
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter(class != 'NODATA', class != 'Ice') %>%
-  mutate(var = var / total_land_area) %>%
-  ggplot(aes(time_step, var)) +
+#  mutate(var = var / total_land_area) %>%
+  ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
+#   geom_step(data = contemp_types, aes(group = type, color = type), position = 'stack', direction = 'mid', size = 1.5, show.legend = FALSE) +
   geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
   geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
-  facet_wrap(~type, ncol = 2, dir = 'h') +
+  facet_wrap(~var, ncol = 2, dir = 'h') +
   scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
   scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
   theme_classic() +
@@ -430,50 +509,38 @@ contemp_plot <- contemp_summary %>%
   scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
                    labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land surface') +
-  theme(strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.8, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+  theme(strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
 
-addSmallLegend(contemp_plot)
+addSmallLegend(contemp_plot)  #+ guides(color = FALSE)
 ```
-
+ 
 ```{r}
-global_legacy_plot <- bind_rows(global_legacy_glm1,global_legacy_glm2) %>%
+legacy_plot <- legacy_mods %>%
   left_join(time_key) %>%
-  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
-  group_by(vars) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
+  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50'))),
+         name = case_when(str_detect(name, 'global') ~ 'Global Lands',
+                          str_detect(name, 'nmh') ~ 'Likely and Potential Natural Lands (NMH)',
+                          str_detect(name, 'pa') ~ 'Protected Areas',
+                          str_detect(name, 'ind') ~ 'Indigenous Lands')) %>%
+   ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
   geom_tile() +
   geom_vline(xintercept = '1', color = 'red', linetype = 2) +
-  scale_fill_viridis_c(direction = -1, name = 'Predictive ability\n(scaled AIC)', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+  scale_fill_viridis_c(direction = -1, name = '', breaks = c(.05, .95), labels = c('More informative', 'Less informative')) +
   theme_classic() +
-  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  facet_wrap(~name, ncol = 1) +
+  scale_y_discrete(labels = c('Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
                    labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
   labs(x = 'Anthrome Year', y = NULL) +
-  theme(strip.background = element_blank(), axis.text=element_text(size=rel(0.8)))
+  theme(strip.background = element_blank(), axis.text=element_text(size=rel(0.8)), legend.position = 'bottom')
+```
+```{r, fig.width=7.75, fig.height =9}
+fig4 <- (wrap_elements(full = addSmallLegend(contemp_plot)) / legacy_plot) + plot_layout(heights = c(1.15,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
-natural_legacy_plot <- bind_rows(global_legacy_glm1_nmh34,global_legacy_glm2_nmh34) %>%
-  left_join(time_key) %>%
-  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
-  group_by(vars) %>%
-  mutate(aic_scaled = scales::rescale(aic)) %>%
-  ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
-  geom_tile() +
-  geom_vline(xintercept = '1', color = 'red', linetype = 2) +
-  scale_fill_viridis_c(direction = -1, name = 'Relative Predictive\nSkill (AIC)', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
-  theme_classic() +
-  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
-  scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
-                   labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
-  labs(x = 'Anthrome Year', y = NULL) +
-  theme(strip.background = element_blank(),axis.text=element_text(size=rel(0.8)))
+fig4
 ```
 
-```{r, fig.width=8, fig.height =8}
-legacy_plot <- (wrap_elements(full = addSmallLegend(contemp_plot)) / (global_legacy_plot/natural_legacy_plot + plot_layout(guides = 'collect'))) + plot_layout(heights = c(2,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
-legacy_plot
-```
 ### Save figures
 
 ```{r}
@@ -481,13 +548,13 @@ legacy_plot
 ggsave('figures/anthrome_summary_global.svg', plot = global_plot, width = 9, height = 3.5)
 ggsave('figures/anthromes_summary_region.svg', plot = addSmallLegend(region_plot), height = 8, width = 9)
 ggsave('figures/anthromes_summary_biome.svg', plot = addSmallLegend(biome_plot), height = 8, width = 9)
-ggsave('figures/anthromes_legacies.svg', plot = legacy_plot, height = 8, width = 8)
+ggsave('figures/anthromes_legacies.svg', plot = fig4, height = 9, width = 7.75)
 
 # save pngs for drafts and email
 ggsave('figures/anthrome_summary_global.png', plot = global_plot, width = 9, height = 3.5, dpi = 600)
 ggsave('figures/anthromes_summary_region.png', plot = addSmallLegend(region_plot), height = 8, width = 9, dpi = 600)
 ggsave('figures/anthromes_summary_biome.png', plot = addSmallLegend(biome_plot), height = 8, width = 9, dpi = 600)
-ggsave('figures/anthromes_legacies.png', plot = legacy_plot, height = 8, width = 8, dpi = 600)
+ggsave('figures/anthromes_legacies.png', plot = fig4, height = 9, width = 7.75, dpi = 600)
 ```
 
 
