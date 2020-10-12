@@ -17,77 +17,15 @@ Processing contemporary variables for comparison to Anthromes data
 
 Import anthromes dgg data
 ```{r}
-an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')  %>% st_set_crs(4326)
-an12_dgg <- read_csv('an12_dgg.csv')
+an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp') %>% st_set_crs(4326)
 ```
 
 
 ```{r}
-hfp <- raster('data/raw_data/hfp2000_merisINT.tif') # this is mollweide
-landsuit <- raster('../comb_low/w001001.adf')
-landsuit[landsuit <= -900] <- NA # get rid of null values
 nmh <- raster('../WCMC_natural_modified_habitat_screening_layer/natural_modified_habitat_screening_layer.tif')
-pop2017 <- raster('~/Downloads/HYDE/hyde32_output/2017AD_pop.zip/popc_2017AD.asc')
-```
-
-```{r}
-plot(hfp);plot(landsuit);plot(nmh)
-plot(is.na(landsuit))
-```
-
-
-```{r}
-# the hfp data are mollweide, so convert the dgg first for that
-dgg_mollweide <- an12_dgg_inputs %>%
-  st_transform(st_crs(hfp))
-```
-
-```{r}
+# two different ways to get nmh, modal and proportional
 nmh_extract <- exact_extract(nmh, an12_dgg_inputs, fun = 'mode')
-landsuit_extract <- exact_extract(landsuit, an12_dgg_inputs, fun = 'mode')
-hfp_extract <- exact_extract(hfp, dgg_mollweide, fun = c('max', 'mean'))
-pop2017_extract <- exact_extract(pop2017, an12_dgg_inputs, fun = 'sum')
-```
-
-
-```{r}
-plot(as.factor(nmh))
-
-plot(nmh == 4)
-
-nmh2 <- exact_extract(nmh, an12_dgg_inputs, function(value, frac) {
-  tapply(frac, value, sum) / sum(frac)
-})
-nmh2
-exact_extract(nmh == 4, an12_dgg_inputs, fun = 'mode')
-bind_rows(nmh2)
-```
-
-
-```{r}
-nmh34 <- clamp(nmh, lower = 3, upper = 4, useValues = FALSE)
-nmh4 <- clamp(nmh, lower = 4, upper = 4, useValues = FALSE)
-
-nmh_mask <- brick(nmh34, nmh4)
-
-nmh_count <- exact_extract(nmh, an12_dgg_inputs, function(value, frac) {
-  tapply(frac, value, sum) / sum(frac)
-})
-
-
-nmh1
-t1 <- nmh %>% crop(extent(c(10,20,30,40)))
-
-t1[t1 != 4] <- NA
-plot()
-
-length(nmh_count2)
-exact_extract(t1, an12_dgg_inputs, fun = 'count')  
-
-
-nmh_count[[1]]%>% dim
-
-nmh_tibble<- nmh_count %>% 
+nmh_tibble <- exact_extract(nmh, an12_dgg_inputs, function(value, frac) tapply(frac, value, sum) / sum(frac)) %>% 
   map(~{if(length(.) > 0})
   map(~{if(length(.) == 0) c(`1` = NA, `2` = NA, `3` = NA, `4` = NA) else .}) %>% 
   map_dfr(as.list) %>%
@@ -95,31 +33,9 @@ nmh_tibble<- nmh_count %>%
             transmute(nmh_4 = `4`, nmh_34 = `3` + `4`)
 ```
 
-
 ```{r}
 dgg <- an12_dgg_inputs %>%
-  bind_cols(hfp_extract) %>%
-  mutate(nmh = as.factor(nmh_extract),
-         landsuit = as.factor(landsuit_extract),
-         pop17 = pop2017_extract)
-```
-
-```{r}
-ggplot(dgg) +
-  geom_sf(aes(fill = nmh), color = NA) +
-  scale_fill_viridis_d()
-
-ggplot(dgg) +
-  geom_sf(aes(fill = max), color = NA) +
-  scale_fill_viridis_c()
-
-ggplot(dgg) +
-  geom_sf(aes(fill = mean), color = NA) +
-  scale_fill_viridis_c()
-
-ggplot(dgg) +
-  geom_sf(aes(fill = landsuit), color = NA) +
-  scale_fill_viridis_d()
+  mutate(nmh = as.factor(nmh_extract))
 ```
 
 ```{r}
