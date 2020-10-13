@@ -10,60 +10,43 @@ knitr::opts_chunk$set(echo = TRUE)
 library(dggridR)
 library(raster)
 library(sf)
+sf_use_s2(TRUE) # for s2 spherical geometry
 library(exactextractr)
 library(tidyverse)
 devtools::load_all()
 ```
 
-# Discrete Global Grid setup
+# Discrete Global Grid System
 
 Generate an Icosahedral Snyder Equal Area Aperture 3 hexagonal grid. Use the Level 12 resolution for ~100km grid cells.
 ```{r}
 # construct the DGG
-dggs <- dgconstruct(res=12)
+dggs <- dgconstruct(res = 12)
+```
 
-#save the DGG
-dgearthgrid(dggs, frame = TRUE, wrapcells = FALSE, savegrid =  "./l12_ISEA3H_dgg.shp")
+Create a land mask based on HYDE 3.2. Get the cell centroids, and use to select the corresponding Level 12 DGG cells.
+```{r}
+land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc') %>% 
+  rasterToPoints()
 
-dgg <- dgconstruct(res = 12) %>%
-  dgearthgrid(frame = TRUE, wrapcells = FALSE, savegrid = 'dgg_l12.shp')
+dgg_ids <- unique(dgGEO_to_SEQNUM(dggs, land_area[,'x'], land_area[,'y'])$seqnum) 
+```
 
+```{r include=FALSE}
+rm(land_area)
+```
 
-grid <- dgconstruct(res = 7) %>%
-  dgearthgrid(frame = FALSE, wrapcells = FALSE) %>%
-  st_as_sf() %>%
-  mutate(id = 1:n()) %>%
-  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30")) %>%
-  .[land_mask, ]
-
- #%>% st_set_crs('+proj=isea')
-plot(grid)
+Create polygons from the DGG system and locations
+```{r}
+dgg_land <- dgcellstogrid(dggs, dgg_ids, frame = FALSE, wrapcells = FALSE) %>%
+  st_as_sf(crs = 4326) %>%
+  mutate(dgg_id = dgg_ids) %>%
+  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30"))
 ```
 
 ```{r}
-dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
-
-dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
+plot(dgg_land)
 ```
-
-
-## Calculate land mask
-
-```{r}
-land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc')
-```
-
-```{r}
-dgg_land <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp') %>%
-  mutate(land_area = exact_extract(land_area, ., 'sum')) %>%
-  filter(land_area > 0) %>%
-  tibble::remove_rownames()
-```
-
-```{r}
-write_sf(dgg_land, 'l12_ISEA3H_dgg_land.shp')
-```
-perhpas separate above to dgg creation script?
 
 
 # HYDE to DGG
