@@ -24,40 +24,67 @@ Generate an Icosahedral Snyder Equal Area Aperture 3 hexagonal grid. Use the Lev
 dggs <- dgconstruct(res = 12)
 ```
 
-Create a land mask based on HYDE 3.2. Get the cell centroids, and use to select the corresponding Level 12 DGG cells.
+Load a a set of DGG IDs we can use as a land mask. These are based on the intersection of the HYDE 3.2 land mask and previously generated Level 12 DGG grids from GLOBE. We use these precomputed IDs as a land mask for simplicity.
 ```{r}
-land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc') %>% 
-  rasterToPoints()
-
-dgg_ids <- unique(dgGEO_to_SEQNUM(dggs, land_area[,'x'], land_area[,'y'])$seqnum) 
+dgg_ids <- read_csv('data/raw_data/dgg_ids.csv', col_types = 'ii') # read ids as integers
 ```
 
-```{r include=FALSE}
-rm(land_area)
-```
-
-Create polygons from the DGG system and locations
+Create polygons from the DGG system and cell numbers from the HYDE land mask.
 ```{r}
-dgg_land <- dgcellstogrid(dggs, dgg_ids, frame = FALSE, wrapcells = FALSE) %>%
+dgg_land <- dgcellstogrid(dggs, dgg_ids$ANL12_ID, frame = FALSE, wrapcells = FALSE) %>%
   st_as_sf(crs = 4326) %>%
-  mutate(dgg_id = dgg_ids) %>%
+  bind_cols(dgg_ids) %>%
   st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30"))
 ```
 
+## Process HYDE fixed inputs, regions, and NMH layers
+
+Load the necessary input rasters.
 ```{r}
-plot(dgg_land)
+land_area_rast <- raster('data/raw_data/supporting_5m_grids/maxln_cr.tif')
+pot_veg_rast <- raster('data/raw_data/supporting_5m_grids/potveg15.tif')
+pot_vill_rast <- raster('data/raw_data/supporting_5m_grids/potvill20.tif')
+regions_rast <- raster('data/raw_data/simple_regions.tif')
+nmh <- raster('../WCMC_natural_modified_habitat_screening_layer/natural_modified_habitat_screening_layer.tif')
+```
+
+```{r}
+nmh_tibble <- exact_extract(nmh, dgg_land, function(value, frac) tapply(frac, value, sum) / sum(frac)) %>% 
+  map(~{if(length(.) > 0})
+  map(~{if(length(.) == 0) c(`1` = NA, `2` = NA, `3` = NA, `4` = NA) else .}) %>% 
+  map_dfr(as.list) %>%
+  replace_na(list(`1` = 0, `2` = 0, `3` = 0, `4` = 0)) %>% # turn na's into zeros
+  transmute(nmh_4 = `4`, nmh_34 = `3` + `4`)
+    
+fixed_inputs <- dgg_ids %>%
+  bind_cols(nmh_tibble) %>%
+  mutate(area = exact_extract(land_area_rast, dgg_land, 'sum'), 
+         pot_veg = exact_extract(pot_veg_rast, dgg_land, 'mode'),
+         pot_vill = exact_extract(pot_vill_rast, dgg_land, 'mode'),
+         region = exact_extract(regions_rast, dgg_land, 'mode'))
+```
+
+
+
+## Three Global Conditions Data
+```{r}
+tgc <- read_csv('data/raw_data/three_conditions_v4_rep_data.csv') %>% 
+  dplyr::select(l1_id, biome, `@3_cond_v4`, hfp_max, pa_km2, kba_km2, ind_cnt, v_rich, v_thr) %>%
+  rename(olson_biome = biome) %>% 
+  left_join(dgg_land, by = c('l1_id' = 'L1_ID')) 
+```
+
+```{r}
+bind_cols(tgc, nmh_tibble)
 ```
 
 
 # HYDE to DGG
 ```{r}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
-dgg_ids <- dgg_land$id
-
-saveRDS(dgg_ids, 'dgg_ids')
 ```
 
-Loop through each variable name, import the HYDE rasters from each year, brick, and extract by dgg cells.
+Loop through each variable name, import HYDE rasters from each year, brick, and extract by DGG polygon.
 ```{r}
 hyde2dgg <- function(hyde_varname, hyde_path){
   suppressWarnings(
@@ -85,7 +112,6 @@ hyde_dgg_upper <- hyde_names %>%
 hyde_dgg_lower <- hyde_names %>%
   map(hyde2dgg, '~/Downloads/lower/zip') %>%
   bind_cols()
-
 # check that ncol(hyde) == length(hyde_names) * length(time_steps)
 ```
 
@@ -94,30 +120,7 @@ saveRDS(hyde_dgg, 'hyde_dgg')
 saveRDS(hyde_dgg_upper, 'hyde_dgg_upper')
 saveRDS(hyde_dgg_lower, 'hyde_dgg_lower')
 ```
- move ^ to hyde script?
- 
-## process HYDE fixed inputs
-```{r}
-land_area_rast <- raster('data/raw_data/supporting_5m_grids/maxln_cr.tif')
-pot_veg_rast <- raster('data/raw_data/supporting_5m_grids/potveg15.tif')
-pot_vill_rast <- raster('data/raw_data/supporting_5m_grids/potvill20.tif')
-plot(pot_veg <= 8)
-```
 
-```{r}
-fixed_inputs <- dgg_land %>%
-  mutate(area = exact_extract(land_area_rast, ., 'sum'), # is this redundant?
-         pot_veg = exact_extract(pot_veg_rast, ., 'mode'),
-         pot_vill = exact_extract(pot_vill_rast, ., 'mode')) %>%
-  mutate(trees = pot_veg <= 8) %>% 
-  select(area:trees) %>%
-  st_drop_geometry() %>%
-  rownames_to_column('id')
-```
-
-```{r}
-write_csv(fixed_inputs, 'fixed_inputs.csv')
-```
 
 # Anthromes classification
 
@@ -315,13 +318,3 @@ an12_dgg_inputs %>% dplyr::select(id) %>%
   write_sf('an12_dgg.shp')
 ```
 
-# add regions
-
-```{r}
-regions_dgg <- raster::raster('tmp/simple_regions.tif') %>%
-  exact_extract(an12_dgg_inputs, 'mode')
-
-an12_dgg_inputs %>%  st_set_crs(4326) %>% mutate(region = regions_dgg) %>% left_join(region_key) %>%
-  select(-region) %>%
-  write_sf('an12_dgg_inputs.shp')
-```
