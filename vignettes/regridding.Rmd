@@ -1,5 +1,5 @@
 ---
-title: "reprojection"
+title: "Reprojection"
 author: "Nick Gauthier"
 date: "7/23/2020"
 output: html_document
@@ -7,20 +7,50 @@ output: html_document
 
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
+library(dggridR)
 library(raster)
 library(sf)
 library(exactextractr)
-library(fasterize)
 library(tidyverse)
 devtools::load_all()
 ```
 
+# Discrete Global Grid setup
 
+Generate an Icosahedral Snyder Equal Area Aperture 3 hexagonal grid. Use the Level 12 resolution for ~100km grid cells.
+```{r}
+# construct the DGG
+dggs <- dgconstruct(res=12)
+
+#save the DGG
+dgearthgrid(dggs, frame = TRUE, wrapcells = FALSE, savegrid =  "./l12_ISEA3H_dgg.shp")
+
+dgg <- dgconstruct(res = 12) %>%
+  dgearthgrid(frame = TRUE, wrapcells = FALSE, savegrid = 'dgg_l12.shp')
+
+
+grid <- dgconstruct(res = 7) %>%
+  dgearthgrid(frame = FALSE, wrapcells = FALSE) %>%
+  st_as_sf() %>%
+  mutate(id = 1:n()) %>%
+  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30")) %>%
+  .[land_mask, ]
+
+ #%>% st_set_crs('+proj=isea')
+plot(grid)
+```
+
+```{r}
+dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
+
+dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
+```
+
+
+## Calculate land mask
 
 ```{r}
 land_area <- raster('data/raw_data/fixed_input/maxln_cr.asc')
-
-cellStats(land_area, sum)
 ```
 
 ```{r}
@@ -35,7 +65,8 @@ write_sf(dgg_land, 'l12_ISEA3H_dgg_land.shp')
 ```
 perhpas separate above to dgg creation script?
 
-# HYDE
+
+# HYDE to DGG
 ```{r}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 dgg_ids <- dgg_land$id
@@ -45,8 +76,6 @@ saveRDS(dgg_ids, 'dgg_ids')
 
 Loop through each variable name, import the HYDE rasters from each year, brick, and extract by dgg cells.
 ```{r}
-hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
-
 hyde2dgg <- function(hyde_varname, hyde_path){
   suppressWarnings(
     list.files(hyde_path, recursive = TRUE, full.names = TRUE) %>%
@@ -57,6 +86,10 @@ hyde2dgg <- function(hyde_varname, hyde_path){
   exact_extract(dgg_land, 'sum')
   )
 }
+```
+
+```{r}
+hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
 
 hyde_dgg <- hyde_names %>%
   map(hyde2dgg, '~/Downloads/baseline/zip') %>%
@@ -70,24 +103,7 @@ hyde_dgg_lower <- hyde_names %>%
   map(hyde2dgg, '~/Downloads/lower/zip') %>%
   bind_cols()
 
-test <- suppressWarnings(list.files('~/Downloads/upper/zip/', recursive = TRUE, full.names = TRUE) %>%  str_subset(., 'cropland') %>% map(raster) %>% brick %>%`crs<-`(value = '+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0') %>%
-  exact_extract(dgg_land, 'sum'))
-
-# check that ncol(hyde_test) == length(hyde_names) * length(time_steps)
-
-hyde_dgg1 <- readRDS('hyde_dgg_upper')
-hyde_dgg1;test
-
-bind_cols(hyde_dgg1, test) %>%
-  select(!contains('...'))
-
-ncol(hyde_dgg1)
-
-#missing 32
-map(hyde_names, ~select(hyde_dgg1, contains(.)) %>% ncol)
-test2 <- select(hyde_dgg1, contains('cropland')) %>% names
-
-saveRDS(bind_cols(hyde_dgg1, select(test, !all_of(test2))), 'hyde_dgg_upper')
+# check that ncol(hyde) == length(hyde_names) * length(time_steps)
 ```
 
 ```{r}
@@ -96,7 +112,8 @@ saveRDS(hyde_dgg_upper, 'hyde_dgg_upper')
 saveRDS(hyde_dgg_lower, 'hyde_dgg_lower')
 ```
  move ^ to hyde script?
-
+ 
+## process HYDE fixed inputs
 ```{r}
 land_area_rast <- raster('data/raw_data/supporting_5m_grids/maxln_cr.tif')
 pot_veg_rast <- raster('data/raw_data/supporting_5m_grids/potveg15.tif')
@@ -106,7 +123,7 @@ plot(pot_veg <= 8)
 
 ```{r}
 fixed_inputs <- dgg_land %>%
-  mutate(area = exact_extract(land_area_rast, ., 'sum'),
+  mutate(area = exact_extract(land_area_rast, ., 'sum'), # is this redundant?
          pot_veg = exact_extract(pot_veg_rast, ., 'mode'),
          pot_vill = exact_extract(pot_vill_rast, ., 'mode')) %>%
   mutate(trees = pot_veg <= 8) %>% 
@@ -115,13 +132,12 @@ fixed_inputs <- dgg_land %>%
   rownames_to_column('id')
 ```
 
-does the tree map match what you get by thresholding the biomes later?
-
-
-
 ```{r}
 write_csv(fixed_inputs, 'fixed_inputs.csv')
 ```
+
+# Anthromes classification
+
 ```{r}
 dgg_ids <- readRDS('dgg_ids')
 fixed_inputs <- read_csv('fixed_inputs.csv') %>%
@@ -159,7 +175,7 @@ anthromes_dgg <- hyde_dgg %>%
             used = urban + crops + grazing,
             .keep = 'unused') %>%
   anthromes_classify()) #%>%
-## necassary to save ram, but not if run on cluster
+## necessary to save ram, but not if run on cluster
 write_csv(anthromes_dgg, 'anthromes_dgg2.csv')
 gc()
 read_csv('anthromes_dgg2.csv') %>%
@@ -169,7 +185,7 @@ read_csv('anthromes_dgg2.csv') %>%
   write_csv('anthromes_dgg.csv')
 ```
 
-
+## classify uncertainties
 ```{r}
 hyde_dgg_upper <- readRDS('hyde_dgg_upper')
 
@@ -275,13 +291,6 @@ anthromes_dgg_shp <- anthromes_dgg %>%
 write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
 ```
 
-```{r}
-ggplot(filter(anthromes_dgg_shp, id < 200000)) +
-  geom_sf(aes(fill = as.factor(`1200AD`)), color = NA, lwd = .1) +
-  coord_sf(crs = st_crs("+proj=eck4"))
-```
-
-
 # Create final masks and grids
 ```{r, eval = FALSE}
 dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
@@ -322,42 +331,14 @@ an12_dgg_inputs %>% dplyr::select(id) %>%
   left_join(an12_dgg) %>%
   write_sf('an12_dgg.shp')
 ```
-add regions
+
+# add regions
 
 ```{r}
-regions_dgg <- raster::raster('../simple_regions.tif') %>%
+regions_dgg <- raster::raster('tmp/simple_regions.tif') %>%
   exact_extract(an12_dgg_inputs, 'mode')
 
 an12_dgg_inputs %>%  st_set_crs(4326) %>% mutate(region = regions_dgg) %>% left_join(region_key) %>%
   select(-region) %>%
   write_sf('an12_dgg_inputs.shp')
-```
-
-# DGG generation from analysis script
-```{r}
-# construct the DGG
-dggs <- dgconstruct(res=12)
-
-#save the DGG
-dgearthgrid(dggs, frame = TRUE, wrapcells = FALSE, savegrid =  "./l12_ISEA3H_dgg.shp")
-
-dgg <- dgconstruct(res = 12) %>%
-  dgearthgrid(frame = TRUE, wrapcells = FALSE, savegrid = 'dgg_l12.shp')
-
-
-grid <- dgconstruct(res = 7) %>%
-  dgearthgrid(frame = FALSE, wrapcells = FALSE) %>%
-  st_as_sf() %>%
-  mutate(id = 1:n()) %>%
-  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30")) %>%
-  .[land_mask, ]
-
- #%>% st_set_crs('+proj=isea')
-plot(grid)
-```
-
-```{r}
-dgg12 <- read_sf('data/raw_data/l12_ISEAH_dgg.shp/l12_ISEA3H_dgg.shp')
-
-dgg12 <- st_set_crs(dgg12 , st_crs(anthromes))
 ```
