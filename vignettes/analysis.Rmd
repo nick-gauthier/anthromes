@@ -42,19 +42,38 @@ contemp_vars <- read_sf('contemp_vars.shp') %>%
          v_thr = round(v_thr), hfp_max = round(hfp_max))
 ```
 
-# Anthrome Trajectory Summaries
+# Analysis
+## Anthrome Trajectory Summaries
 
-Summary of of global land area for each Anthrome.
+Summary of of global land area for each anthrome, and broken down by region and biome.
 ```{r}
 global_summary <- an12_dgg_long %>% anthrome_trajectory()
 regional_summary <- an12_dgg_long %>% anthrome_trajectory(by = region_name)
 biome_summary <- an12_dgg_long %>% anthrome_trajectory(by = biome)
 ```
 
-## Conservation Summary
-
 Do the same thing for conservation and biodiversity variables. Note the distinction between the filtered variables and the summed ones which makes the preprocessing more complex.
 ```{r}
+ind_summary <- contemp_vars %>%
+  select(id, ind_cnt) %>%
+  rename(land_area = ind_cnt) %>%
+  st_drop_geometry() %>%
+  remove_missing() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Indigenous Lands')
+
+pa_summary <- contemp_vars %>%
+  select(id, pa_km2) %>%
+    rename(land_area = pa_km2) %>%
+  st_drop_geometry() %>%
+  remove_missing() %>%
+  left_join(an12_dgg, by = 'id') %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  anthrome_trajectory() %>%
+  mutate(var = 'Protected Areas')
+
 kba_summary <- contemp_vars %>%
   select(id, kba_km2) %>%
   rename(land_area = kba_km2) %>%
@@ -118,16 +137,19 @@ wild_3gc_summary <- contemp_vars %>%
   anthrome_trajectory() %>%
   mutate(var = 'Large Wild Areas (3GC)')
 
-contemp_summary <- bind_rows(kba_summary, unused_summary, 
+contemp_summary <- bind_rows(kba_summary, pa_summary,
+                             ind_summary, unused_summary, 
                              nmh3_summary, nmh4_summary, 
                              shared_3gc_summary, wild_3gc_summary) %>%
   # make sure they plot in the right order
-  mutate(var = factor(var, levels = c('Key Biodiversity Areas', 'Seminatural and Wildlands (2017)', 
+  mutate(var = factor(var, levels = c('Key Biodiversity Areas', 'Protected Areas',
+                                      'Indigenous Lands', 'Seminatural and Wildlands (2017)', 
                                         'Potential Natural (NMH)',  'Likely Natural (NMH)', 
                                         'Shared Lands (3GC)', 'Large Wild Areas (3GC)')))
 ```
 
-## Save summary files
+
+ Save summary files
 
 ```{r}
 global_summary %>% 
