@@ -190,71 +190,53 @@ contemp_summary %>%
 
 ## HYDE Population Curves
 
-
 Get HYDE population data.
 ```{r}
-hyde_pop <- readRDS('hyde_dgg') %>%
-  select(contains('popc')) %>%
-  mutate(id = readRDS('dgg_ids')) %>%
-  filter(id %in% an12_dgg_inputs$id) 
+hyde_pop <- readRDS('data/derived_data/hyde_dgg') %>%
+  filter(var == 'popc') %>%
+  select(-var) %>%
+  pivot_longer(-ANL12_ID, names_to = 'time_step', values_to = 'population')
 
 hyde_pop_all <- hyde_pop %>%
-  select(-id) %>%
-  summarise_all(sum, na.rm = TRUE) %>% 
-  gather(key, population) %>%
-  separate(key, into = c('var', 'time_step'), sep  = '_') %>%
-  select(-var) %>%
-  left_join(time_key) %>%
+  group_by(time_step) %>%
+  summarise(population = sum(population)) %>%
+    mutate(pop_percent = population / max(population)) %>%
+  left_join(time_key, by = 'time_step') %>%
+  filter(!(year %in% c(2001:2009,2011:2016))) %>%
   select(year, population) %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  mutate(pop_percent = population / max(population)) %>%
-  left_join(time_key) %>%
-  filter(!(year %in% c(2001:2009,2011:2016)))
-
+         period = factor(period, c('Millennia', 'Centuries', 'Decades')))
+  
 hyde_pop_regions <- hyde_pop %>%
-  left_join(an12_dgg_inputs, by = 'id') %>% 
-  select(-c(id:pot_vill), -geometry) %>%
-  group_by(region_name) %>%
-  summarise_all(sum, na.rm = TRUE) %>% 
-  gather(key, population, -region_name) %>%
-  separate(key, into = c('var', 'time_step'), sep  = '_') %>%
-  select(-var) %>%
-  left_join(time_key) %>%
-  select(region_name, year, population) %>%
+  left_join(st_drop_geometry(an12_dgg_inputs), by = c('ANL12_ID' = 'id')) %>%
+  group_by(region_name, time_step) %>%
+  summarise(population = sum(population)) %>%
+  mutate(pop_percent = population / max(population)) %>%
+  ungroup() %>%
+  left_join(time_key, by = 'time_step') %>%
+    filter(!(year %in% c(2001:2009,2011:2016))) %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  group_by(region_name) %>%
-  mutate(pop_percent = population / max(population)) %>%
-  ungroup() %>%
-  left_join(time_key) %>%
-  filter(!(year %in% c(2001:2009,2011:2016)))
+         period = factor(period, c('Millennia', 'Centuries', 'Decades')))
 
 hyde_pop_biomes <- hyde_pop %>%
-  left_join(an12_dgg_inputs, by = 'id') %>% 
-  select(-id, -land_area, -pot_vill,-region_name, -geometry) %>%
-  left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
+  left_join(st_drop_geometry(an12_dgg_inputs), by = c('ANL12_ID' = 'id')) %>%
+    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
   select(-pot_veg) %>%
-  group_by(biome) %>%
-  summarise_all(sum, na.rm = TRUE) %>% 
-  gather(key, population, -biome) %>%
-  separate(key, into = c('var', 'time_step'), sep  = '_') %>%
-  select(-var) %>%
+  group_by(biome, time_step) %>%
+  summarise(population = sum(population)) %>%
+  mutate(pop_percent = population / max(population)) %>%
+  ungroup() %>%
   left_join(time_key, by = 'time_step') %>%
-  select(biome, year, population) %>%
+    filter(!(year %in% c(2001:2009,2011:2016))) %>%
   mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                             year %in% seq(100, 1700, 100) ~ 'Centuries',
                             year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
          period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
-  group_by(biome) %>%
-  mutate(pop_percent = population / max(population)) %>%
-  ungroup() %>%
-  filter(biome != 'Ice, snow') %>% left_join(time_key) %>%
-  filter(!(year %in% c(2001:2009,2011:2016)))
+    filter(biome != 'Ice, snow')
 ```
 
 
