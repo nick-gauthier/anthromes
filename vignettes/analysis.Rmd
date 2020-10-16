@@ -95,7 +95,7 @@ unused_summary <- contemp_vars %>%
    left_join(an12_dgg, by = 'id') %>% 
   pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
-    mutate(var = 'Seminatural and Wildlands (2017)')
+    mutate(var = 'Cultured and Wildlands (2017)')
   
 nmh3_summary <- contemp_vars %>%
   mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
@@ -143,7 +143,7 @@ contemp_summary <- bind_rows(kba_summary, pa_summary,
                              shared_3gc_summary, wild_3gc_summary) %>%
   # make sure they plot in the right order
   mutate(var = factor(var, levels = c('Key Biodiversity Areas', 'Protected Areas',
-                                      'Indigenous Lands', 'Seminatural and Wildlands (2017)', 
+                                      'Indigenous Lands', 'Cultured and Wildlands (2017)', 
                                         'Potential Natural (NMH)',  'Likely Natural (NMH)', 
                                         'Shared Lands (3GC)', 'Large Wild Areas (3GC)')))
 ```
@@ -346,9 +346,9 @@ legacy_mods <- expand_grid(time_step = unique(c(time_steps_millennia,
 #   group_by(type, time_step) %>%
 #   summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
 #   pivot_wider(c(time_step, period), names_from = type, values_from = percent_land_area) %>%
-#   mutate(Seminatural = Wild + Seminatural) %>% # to match the stacked bar plot
-#   select(time_step, Wild, Seminatural, period) %>%
-#   pivot_longer(Wild:Seminatural, names_to = 'type', values_to = 'percent_land_area') %>%
+#   mutate(Cultured = Wild + Cultured) %>% # to match the stacked bar plot
+#   select(time_step, Wild, Cultured, period) %>%
+#   pivot_longer(Wild:Cultured, names_to = 'type', values_to = 'percent_land_area') %>%
 #       mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
 #   arrange(time_step)
 
@@ -358,8 +358,8 @@ global_types <- global_summary %>%
   summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
     mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   arrange(time_step) %>%
-  filter(type != 'Used') %>%
-  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+  filter(type != 'Intensive') %>%
+  mutate(type = if_else(type == 'Cultured', 'Intensive', 'Wild')) # just for the colors
 
 global_plot <- global_summary %>%
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -401,8 +401,8 @@ region_types <- regional_summary %>%
   summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
     mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   arrange(time_step) %>%
-  filter(type != 'Used') %>%
-  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+  filter(type != 'Intensive') %>%
+  mutate(type = if_else(type == 'Cultured', 'Intensive', 'Wild')) # just for the colors
 
 region_plot <- regional_summary %>% 
   filter(!is.na(region_name)) %>%
@@ -459,8 +459,8 @@ biome_types <- biome_summary %>%
   summarise(percent_land_area = sum(percent_land_area), period = unique(period)) %>%
     mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   arrange(time_step) %>%
-  filter(type != 'Used') %>%
-  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+  filter(type != 'Intensive') %>%
+  mutate(type = if_else(type == 'Cultured', 'Intensive', 'Wild')) # just for the colors
 
 biome_plot <- biome_summary %>% 
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -496,8 +496,8 @@ contemp_types <- contemp_summary %>%
   summarise(var = sum(var), period = unique(period)) %>%
     mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   arrange(time_step) %>%
-  filter(type != 'Used') %>%
-  mutate(type = if_else(type == 'Seminatural', 'Used', 'Wild')) # just for the colors
+  filter(type != 'Intensive') %>%
+  mutate(type = if_else(type == 'Cultured', 'Intensive', 'Wild')) # just for the colors
 
 contemp_plot <- contemp_summary %>%
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -629,24 +629,24 @@ test_dat2 %>%
 ## Onsets
 
 ```{r}
-used_onset <- an12_dgg %>%
+intensive_onset <- an12_dgg %>%
     pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
     group_by(id) %>%
     filter(anthrome <= 43) %>%
     left_join(time_key) %>%
-    summarise(used_onset = min(year, na.rm = TRUE))
+    summarise(intensive_onset = min(year, na.rm = TRUE))
 
 change_type <- an12_dgg %>%
     pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
       group_by(id) %>%
-  summarise(used = any(anthrome <= 43), seminatural = any(anthrome <= 54)) %>%
-  left_join(used_onset, by = 'id') %>%
-  mutate(class = case_when(used == TRUE & used_onset <= 1 ~'U0001', # fyi case when statement evaluates in order
-                            used == TRUE & used_onset <= 1500 ~ 'U1500',
-                            used == TRUE & used_onset <= 1850 ~ 'U1850',
-                            used == TRUE & used_onset <= 1950 ~ 'U1950',
-                            used == TRUE ~ 'RECNT',
-                            seminatural == TRUE ~ 'SEMI',
+  summarise(intensive = any(anthrome <= 43), cultured = any(anthrome <= 54)) %>%
+  left_join(intensive_onset, by = 'id') %>%
+  mutate(class = case_when(intensive == TRUE & intensive_onset <= 1 ~'U0001', # fyi case when statement evaluates in order
+                            intensive == TRUE & intensive_onset <= 1500 ~ 'U1500',
+                            intensive == TRUE & intensive_onset <= 1850 ~ 'U1850',
+                            intensive == TRUE & intensive_onset <= 1950 ~ 'U1950',
+                            intensive == TRUE ~ 'RECNT',
+                            cultured == TRUE ~ 'SEMI',
                             TRUE  ~ 'NEVR')) %>%
   left_join(an12_dgg_inputs, ., by = 'id') %>%
   mutate(class_biome = if_else(pot_veg <= 8, paste0('W_', class), paste('N_', class))) %>%

@@ -12,24 +12,24 @@ anthrome_key <- tibble(
                    'Residential rainfed croplands', 'Populated croplands', 'Remote croplands',
                    'Residential rangelands', 'Populated rangelands', 'Remote rangelands',
                    'Residential woodlands', 'Populated woodlands', 'Remote woodlands',
-                   'Inhabited treeless & barren lands', 'Wild woodlands',
-                   'Wild treeless and barren lands', 'Ice', 'NODATA'),
+                   'Inhabited drylands', 'Wild woodlands',
+                   'Wild drylands', 'Ice', 'NODATA'),
                  levels = c('Urban', 'Mixed settlements', 'Rice villages', 'Irrigated villages',
                             'Rainfed villages', 'Pastoral villages', 'Residential irrigated croplands',
                             'Residential rainfed croplands', 'Populated croplands', 'Remote croplands',
                             'Residential rangelands', 'Populated rangelands', 'Remote rangelands',
                             'Residential woodlands', 'Populated woodlands', 'Remote woodlands',
-                            'Inhabited treeless & barren lands', 'Wild woodlands',
-                            'Wild treeless and barren lands', 'Ice', 'NODATA')),
+                            'Inhabited drylands', 'Wild woodlands',
+                            'Wild drylands', 'Ice', 'NODATA')),
   level = factor(c('Dense settlements', 'Dense settlements', 'Villages', 'Villages',
                    'Villages', 'Villages', 'Croplands', 'Croplands', 'Croplands', 'Croplands',
-                   'Rangelands', 'Rangelands', 'Rangelands', 'Seminatural', 'Seminatural',
-                   'Seminatural', 'Seminatural', 'Wildlands', 'Wildlands', 'Wildlands', 'NODATA'),
+                   'Rangelands', 'Rangelands', 'Rangelands', 'Cultured', 'Cultured',
+                   'Cultured', 'Cultured', 'Wildlands', 'Wildlands', 'Wildlands', 'NODATA'),
                  levels = c('Dense settlements', 'Villages', 'Croplands',
-                            'Rangelands', 'Seminatural', 'Wildlands', 'NODATA')),
-  type = factor(c('Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used', 'Used',
-                  'Used', 'Used', 'Used', 'Used', 'Seminatural', 'Seminatural','Seminatural',
-                  'Seminatural', 'Wild', 'Wild', 'Wild', 'NODATA'), levels = c('Used', 'Seminatural', 'Wild', 'NODATA'))
+                            'Rangelands', 'Cultured', 'Wildlands', 'NODATA')),
+  type = factor(c('Intensive', 'Intensive', 'Intensive', 'Intensive', 'Intensive', 'Intensive', 'Intensive', 'Intensive', 'Intensive',
+                  'Intensive', 'Intensive', 'Intensive', 'Intensive', 'Cultured', 'Cultured','Cultured',
+                  'Cultured', 'Wild', 'Wild', 'Wild', 'NODATA'), levels = c('Intensive', 'Cultured', 'Wild', 'NODATA'))
 )
 
 anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6',
@@ -39,9 +39,12 @@ anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6',
   setNames(anthrome_key$class)
 
 anthrome_level_color <- c('Dense settlements' = '#CD6666', 'Villages' = '#AA66CD', 'Croplands' = '#FFFF00',
-                          'Rangelands' = '#FFAA00', 'Seminatural' = '#D3FFBE', 'Wildlands' = '#38A800', NODATA = NA)
+                          'Rangelands' = '#FFAA00', 'Cultured' = '#D3FFBE', 'Wildlands' = '#38A800', NODATA = NA)
 
-anthrome_type_color <- c('Used' = '#EDCDCB', 'Seminatural' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
+#anthrome_type_color <- c('Intensive' = '#EDCDCB', 'Cultured' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
+anthrome_type_color <- c('Intensive' = '#EDCDCB', 'Cultured' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
+
+anthrome_colors <- c(anthrome_class_color, anthrome_level_color, anthrome_type_color)
 
 
 # Time steps
@@ -57,12 +60,11 @@ time_steps_centuries <- c("0AD", "100AD", "200AD", "300AD", "400AD", "500AD", "6
 
 time_steps_decades <- c("1700AD", "1710AD",  "1720AD",  "1730AD",  "1740AD",  "1750AD",  "1760AD", "1770AD", "1780AD", "1790AD", "1800AD", "1810AD", "1820AD", "1830AD", "1840AD", "1850AD", "1860AD", "1870AD", "1880AD", "1890AD", "1900AD", "1910AD", "1920AD", "1930AD", "1940AD", "1950AD", "1960AD", "1970AD", "1980AD", "1990AD", "2000AD", "2010AD", "2017AD")
 
-years <- c(seq(-10000, -1000, 1000), 1,
-           seq(100, 1700, 100),
-           seq(1710, 2000, 10),
-           seq(2001, 2017, 1))
-
-time_key <- tibble(time_step = time_steps_ordered, year = years)
+time_key <- tibble(time_step = time_steps_ordered,
+                   year = c(seq(-10000, -1000, 1000), 1,
+                            seq(100, 1700, 100),
+                            seq(1710, 2000, 10),
+                            seq(2001, 2017, 1)))
 
 period_key <- tibble(time_step = time_steps_ordered) %>%
   mutate(millennia = time_step %in% time_steps_millennia,
