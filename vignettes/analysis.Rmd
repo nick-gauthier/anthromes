@@ -449,8 +449,8 @@ biome_plot <- biome_summary %>%
   filter( class != 'NODATA', class != 'Ice', biome != 'Ice, snow') %>%
   ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), width = .8, size = .1)+
-  geom_step(data = biome_types, aes(group = type, color = type), 
-            position = 'stack', direction = 'mid', size = 1.5, show_guide = FALSE) +
+  #geom_step(data = biome_types, aes(group = type, color = type), 
+  #          position = 'stack', direction = 'mid', size = 1.5, show_guide = FALSE) +
   geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
   geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
   geom_line(data = hyde_pop_biomes, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1) +
@@ -514,7 +514,7 @@ legacy_plot <- legacy_mods %>%
    ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
   geom_tile() +
   geom_vline(xintercept = '1', color = 'red', linetype = 2) +
-  scale_fill_viridis_c(direction = -1, name = '', breaks = c(.05, .95), labels = c('More informative', 'Less informative')) +
+  scale_fill_viridis_c(name = '', breaks = c(.05, .95), trans = 'reverse', labels = c('More informative', 'Less informative')) +
   theme_classic() +
   facet_wrap(~name, ncol = 1) +
   scale_y_discrete(labels = c('Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
@@ -523,6 +523,7 @@ legacy_plot <- legacy_mods %>%
   labs(x = 'Anthrome Year', y = NULL) +
   theme(strip.background = element_blank(), axis.text=element_text(size=rel(0.8)), legend.position = 'bottom')
 ```
+
 ```{r, fig.width=8, fig.height =9}
 fig4 <- (wrap_elements(full = addSmallLegend(contemp_plot)) / legacy_plot) + plot_layout(heights = c(1.5,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
@@ -535,13 +536,13 @@ fig4
 ```{r}
 # save vector graphics for high quality figures
 ggsave('figures/anthrome_summary_global.svg', plot = global_plot, width = 9, height = 3.5)
-ggsave('figures/anthromes_summary_region.svg', plot = addSmallLegend(region_plot), height = 8, width = 9)
+ggsave('figures/anthromes_summary_region.svg', plot = addSmallLegend(region_plot) + guides(color = FALSE), height = 8, width = 9)
 ggsave('figures/anthromes_summary_biome.svg', plot = addSmallLegend(biome_plot), height = 8, width = 9)
 ggsave('figures/anthromes_legacies.svg', plot = fig4, height = 9, width = 8)
 
 # save pngs for drafts and email
 ggsave('figures/anthrome_summary_global.png', plot = global_plot, width = 9, height = 3.5, dpi = 600)
-ggsave('figures/anthromes_summary_region.png', plot = addSmallLegend(region_plot), height = 8, width = 9, dpi = 600)
+ggsave('figures/anthromes_summary_region.png', plot = addSmallLegend(region_plot) + guides(color = FALSE), height = 8, width = 9, dpi = 600)
 ggsave('figures/anthromes_summary_biome.png', plot = addSmallLegend(biome_plot), height = 8, width = 9, dpi = 600)
 ggsave('figures/anthromes_legacies.png', plot = fig4, height = 9, width = 8, dpi = 600)
 ```
@@ -555,21 +556,20 @@ Other visualization and analyses not included in the main paper.
 
 ```{r}
 test_dat <- regression_dat %>% 
-  select(-geometry) %>%
   group_nest(region_name)
 ```
 
 ```{r}
 fit_mod1 <- function(x) {
   expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-              predictands = c('hfp_max', 'v_thr', 'v_rich')) %>%
+              predictands = c('v_thr', 'v_rich')) %>%
     mutate(predictors = paste0('an_', time_step),
            aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), dat = x))
 }
 
 fit_mod2 <- function(x) {
   expand_grid(time_step = unique(c(time_steps_millennia, time_steps_centuries)),
-              predictands = c('kba50', 'ind50', 'pa50')) %>%
+              predictands = c('kba50')) %>%
     mutate(predictors = paste0('an_', time_step),
            aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), dat = x))
 }
@@ -590,23 +590,29 @@ test_dat2 <- bind_rows(t1, t2) %>%
   left_join(time_key)
 ```
 
-```{r}
+```{r, fig.width = 7.2, fig.height = 8}
 test_dat2 %>%
-  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50','hfp_max', 'pa50',  'ind50')))) %>%
+  mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50')))) %>%
   group_by(vars, region_name) %>%
   mutate(aic_scaled = scales::rescale(aic)) %>%
   ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
   geom_tile() +
-  geom_vline(xintercept = '-1000', color = 'red', linetype = 2) +
+  geom_vline(xintercept = '1', color = 'red', linetype = 2) +
   facet_wrap(~region_name, ncol = 1) +
-  scale_fill_viridis_c(direction = -1, name = 'Scaled AIC', breaks = c(.05, .95), labels = c('Best', 'Worst')) +
+ scale_fill_viridis_c(name = '', breaks = c(.05, .95), trans = 'reverse', labels = c('More informative', 'Less informative')) +
   theme_classic() +
-  scale_y_discrete(labels = c('Indigenous Lands', 'Protected Lands', 'Human Footprint (max)', 'Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
+  scale_y_discrete(labels = c('Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
                    labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
-  labs(x = 'Predictor Year', y = NULL) +
-  theme(strip.background = element_blank())
+  labs(x = 'Anthrome Year', y = NULL) +
+  theme(strip.background = element_blank(), axis.text=element_text(size=rel(0.8)), legend.position = 'bottom')
 ```
+
+```{r}
+ggsave('figures/anthromes_legacies_regions.png', height = 8, width = 7.2)
+ggsave('figures/anthromes_legacies_regions.svg', height = 8, width = 7.2)
+```
+
 
 ## Onsets
 
@@ -642,6 +648,7 @@ change_type %>% count(class) %>% mutate(n = n / sum(n) * 100)
 ```{r}
 change_type %>% pull(land_area) %>% sum
 ```
+
 ```{r}
 change_type %>% st_drop_geometry %>% count(class, wt =  land_area, name = 'area') %>% 
   mutate(percent = area / sum(area) * 100)%>%  write_csv('onsets_simple_area.csv')
@@ -664,6 +671,7 @@ mutate(class = factor(class, levels = c( "NEVR" , "SEMI" , "U0001" ,"U1500","U18
   theme_bw() +
   coord_sf(crs = st_crs("+proj=eck4"))
 ```
+
 ```{r}
 write_csv(change_type %>% st_drop_geometry(), 'change_type.csv')
 ```
@@ -676,8 +684,6 @@ change_type %>%
   ungroup() %>%
   mutate(test = n / sum(n) * 100)
 ```
-
-
 
 ## always uninhabited
 does this end up being the same as the above analysis?
@@ -857,34 +863,13 @@ olson_key <- tibble(olson_biome = 1:14,
 
 ```{r}
 olson_summary <- an12_dgg_long %>% 
-  left_join(read_csv('olson_tmp.csv')) %>%
+  left_join(read_csv('tmp/olson_tmp.csv')) %>%
   filter(!(olson_biome %in% c(0, NA))) %>% # the NA's are from the land mask, but what about the 0's
   mutate(olson_biome = as.factor(olson_biome)) %>%
   anthrome_trajectory(by = olson_biome) %>%
   mutate(olson_biome = as.numeric(olson_biome)) %>%
   left_join(olson_key)
 ```
-```{r}
-test <- an12_dgg_inputs %>% 
-  left_join(st_drop_geometry(dplyr::select(olson_test, id, olson_biome)))
-
-sum(!(is.na(test$olson_biome)))
-test %>%
-  filter(is.na(olson_biome)) %>%
-  ggplot() +
-  geom_sf() +
-  coord_sf(crs = st_crs("+proj=eck4")) +
-  theme_void()
-
-test %>%
-  filter(olson_biome == 14) %>%
-  ggplot() +
-  geom_sf() +
-  coord_sf(crs = st_crs("+proj=eck4")) +
-  theme_void()
-```
-
-
 
 ```{r, fig.width=9, fig.height=10}
 olson_plot <- olson_summary %>%
@@ -909,8 +894,9 @@ olson_plot <- olson_summary %>%
 
 addSmallLegend(olson_plot) + guides(color = FALSE)
 ```
+
 ```{r}
-ggsave('olson_biomes.png', height = 10, width = 9)
+ggsave('figures/olson_biomes.png', height = 10, width = 9)
 ```
 
 ## 15 class pnv
@@ -943,6 +929,7 @@ biome15_summary <- an12_dgg_long %>%
   left_join(biome_key_15) %>%
   anthrome_trajectory(by = biome15)
 ```
+
 ```{r, fig.width=9, fig.height=10}
 biome15_plot <- biome15_summary %>%
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -970,5 +957,5 @@ addSmallLegend(biome15_plot) + guides(color = FALSE)
 
 
 ```{r}
-ggsave('biomes15.png', height = 10, width = 9)
+ggsave('figures/biomes15.png', height = 10, width = 9)
 ```
