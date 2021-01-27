@@ -22,120 +22,151 @@ Import preprocessed data.
 
 ```{r}
 an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp') %>% 
+  st_drop_geometry() %>%
   rename(land_area = land_ar, pot_vill = pot_vll, region_name = regn_nm) %>%
-  mutate(region_name = if_else(region_name == 'Latin America', 'Latin America and Caribbean', region_name))
+  mutate(region_name = if_else(region_name == 'Latin America', 'Latin America and Caribbean', region_name)) %>%
+  left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% 
+  select(-pot_vill, -pot_veg)
 
-an12_dgg <- read_csv('an12_dgg.csv', col_types = cols(.default = 'i')) %>%
-  dplyr::select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) # remove annual data 
+an12_dgg_baseline <- read_anthromes('an12_dgg.csv')
+an12_dgg_upper <- read_anthromes('tmp/an12_dgg_upper.csv')
+an12_dgg_lower <- read_anthromes('tmp/an12_dgg_lower.csv')
 
-an12_dgg_long <- an12_dgg %>% 
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>% 
-    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% # but join to biome key
-  select(-pot_vill, -pot_veg) %>%
-  pivot_longer(-c(id, land_area, biome, region_name), names_to = 'time_step', values_to = 'anthrome') 
+an12_dgg <- an12_dgg_baseline %>%
+  rename(baseline = anthrome) %>%
+  mutate(upper = an12_dgg_upper$anthrome,
+         lower = an12_dgg_lower$anthrome)%>%
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered), .after = id) %>%
+  left_join(an12_dgg_inputs, by = 'id')
 
+rm(an12_dgg_baseline, an12_dgg_upper, an12_dgg_lower)
+```
+
+
+```{r}
 total_land_area <- sum(an12_dgg_inputs$land_area)
 
-#contemp vars doesn't need to be an sf object here?
 contemp_vars <- read_sf('contemp_vars.shp') %>%
-  mutate(pa = pa_km2 >= land_ar, ind = ind_cnt >= land_ar, kba = kba_km2 >= land_ar, 
-         pa50 = pa_km2 >= (0.5 * land_ar), ind50 = ind_cnt >= (0.5 * land_ar), 
-         kba50 = kba_km2 >= (0.5 * land_ar), v_rich = round(v_rich), 
-         v_thr = round(v_thr), hfp_max = round(hfp_max))
+  st_drop_geometry() %>%
+  mutate(land_area = land_ar, 
+         pa50 = pa_km2 >= (0.5 * land_ar), 
+         ind50 = ind_cnt >= (0.5 * land_ar), 
+         kba50 = kba_km2 >= (0.5 * land_ar), 
+         v_rich = round(v_rich), 
+         v_thr = round(v_thr), 
+         hfp_max = round(hfp_max),
+         tgc = X_3_c_4,
+         nmh3 = nmh_34 - nmh_4) %>%
+    select(-c(X_3_c_4, max, land_ar, landsut, pop17, food_cl, mean, nmh, L1_ID))
+```
+
+```{r}
+regression_dat <- an12_dgg %>%
+  filter(time_step %in% c(time_steps_millennia, time_steps_centuries, '2010AD', '2017AD')) %>%
+  left_join(anthrome_key, by = c('baseline' = 'anthrome')) %>%
+  select(id, time_step, region_name, land_area, class) %>%
+  pivot_wider(names_from = time_step, values_from = class) %>%
+  left_join(select(contemp_vars, -land_area), by = 'id') %>%
+  na.omit %>%
+  rename_with(~paste0('an_', .), all_of(unique(c(time_steps_millennia, time_steps_centuries, '2010AD', '2017AD'))))
 ```
 
 # Analysis
 ## Anthrome Trajectory Summaries
 
-Summary of of global land area for each anthrome, and broken down by region and biome.
+Summary of global land area for each anthrome and broken down by region and biome.
 ```{r, cache = TRUE}
-global_summary <- anthrome_trajectory(an12_dgg_long)
-regional_summary <- anthrome_trajectory(an12_dgg_long, by = region_name)
-biome_summary <- anthrome_trajectory(an12_dgg_long, by = biome)
+global_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline)  %>% anthrome_trajectory()
+regional_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline)  %>% anthrome_trajectory(by = region_name)
+biome_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline)  %>% anthrome_trajectory(by = biome)
 ```
 
-Do the same thing for conservation and biodiversity variables. Note the distinction between the filtered variables and the summed ones which makes the preprocessing more complex.
+Do the same thing for conservation and biodiversity variables. Note the distinction between the filtered variables and the summed ones for which the preprocessing is more complex.
 ```{r, cache = TRUE}
 ind_summary <- contemp_vars %>%
   select(id, ind_cnt) %>%
   rename(land_area = ind_cnt) %>%
-  st_drop_geometry() %>%
   remove_missing() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  # so this join here has two land areas . . . how to handle?
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>%
+ # pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Indigenous Lands')
 
 pa_summary <- contemp_vars %>%
   select(id, pa_km2) %>%
     rename(land_area = pa_km2) %>%
-  st_drop_geometry() %>%
   remove_missing() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>%
+ # pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Protected Areas')
 
 kba_summary <- contemp_vars %>%
   select(id, kba_km2) %>%
   rename(land_area = kba_km2) %>%
-  st_drop_geometry() %>%
   remove_missing() %>%
- left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
+#  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Key Biodiversity Areas')
 
 unused_summary <- contemp_vars %>%
-  select(id, land_ar) %>%
-  st_drop_geometry() %>%
-  left_join(an12_dgg, by = 'id') %>% 
-  filter(`2017AD` >= 50)  %>% # unused lands in 2017
-  select(id, land_ar) %>%
-    rename(land_area = land_ar) %>%
+  select(id, land_area) %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+  filter(time_step == '2017AD', baseline >= 50) %>%
+  #filter(`2017AD` >= 50)  %>% # unused lands in 2017
+  select(id, land_area) %>%
+    #rename(land_area = land_area) %>%
   remove_missing() %>%
-   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
+#  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
     mutate(var = 'Cultured and Wildlands (2017)')
   
 nmh3_summary <- contemp_vars %>%
-  mutate(nmh3_km2 = (nmh_34 - nmh_4) * land_ar) %>%
+  mutate(nmh3_km2 = nmh3 * land_area) %>%
   select(id, nmh3_km2) %>%
-  st_drop_geometry() %>%
     rename(land_area = nmh3_km2) %>%
-   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% rename(anthrome = baseline) %>%
+  #pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Potential Natural (NMH)')
 
 nmh4_summary <- contemp_vars %>%
-  mutate(nmh4_km2 = nmh_4 * land_ar) %>%
+  mutate(nmh4_km2 = nmh_4 * land_area) %>%
   select(id, nmh4_km2) %>%
-  st_drop_geometry() %>%
   rename(land_area = nmh4_km2) %>%
-   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
+  #pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Likely Natural (NMH)')
 
 shared_3gc_summary <- contemp_vars %>%
-  filter(X_3_c_4 == 2) %>%
-  select(id, land_ar) %>%
-  st_drop_geometry() %>%
-  rename(land_area = land_ar) %>%
-   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  filter(tgc == 2) %>%
+  select(id, land_area) %>%
+ # rename(land_area = land_ar) %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% rename(anthrome = baseline) %>%
+  #pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Shared Lands (3GC)')
 
 wild_3gc_summary <- contemp_vars %>%
   filter(X_3_c_4 == 3) %>%
-  select(id, land_ar) %>%
-  st_drop_geometry() %>%
-  rename(land_area = land_ar) %>%
-   left_join(an12_dgg, by = 'id') %>% 
-  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(id, land_area) %>%
+ # rename(land_area = land_ar) %>%
+  left_join(select(an12_dgg, -land_area), by = 'id') %>% 
+   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
+#  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Large Wild Areas (3GC)')
 
@@ -214,7 +245,7 @@ hyde_pop_all <- hyde_pop %>%
          period = factor(period, c('Millennia', 'Centuries', 'Decades')))
   
 hyde_pop_regions <- hyde_pop %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = c('ANL12_ID' = 'id')) %>%
+  left_join(an12_dgg_inputs, by = c('ANL12_ID' = 'id')) %>%
   group_by(region_name, time_step) %>%
   summarise(population = sum(population)) %>%
   mutate(pop_percent = population / max(population)) %>%
@@ -227,9 +258,9 @@ hyde_pop_regions <- hyde_pop %>%
          period = factor(period, c('Millennia', 'Centuries', 'Decades')))
 
 hyde_pop_biomes <- hyde_pop %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = c('ANL12_ID' = 'id')) %>%
-    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
-  select(-pot_veg) %>%
+  left_join(an12_dgg_inputs, by = c('ANL12_ID' = 'id')) %>%
+   # left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
+  #select(-pot_veg) %>%
   group_by(biome, time_step) %>%
   summarise(population = sum(population)) %>%
   mutate(pop_percent = population / max(population)) %>%
@@ -245,23 +276,6 @@ hyde_pop_biomes <- hyde_pop %>%
 
 
 ## Anthrome Legacies
-
-Prepare a data frame for regression.
-```{r}
-regression_dat <- an12_dgg %>%
-  pivot_longer(-id, names_to = 'time', values_to = 'anthrome') %>%
-  left_join(anthrome_key) %>%
-  dplyr::select(-anthrome, -level, -type) %>%
-  pivot_wider(names_from = time, values_from = class) %>%
-  left_join(st_drop_geometry(contemp_vars), by = 'id') %>%
-  na.omit %>%
-  select(id, land_ar, nmh, hfp_max:kba50, all_of(unique(c(time_steps_millennia, time_steps_centuries))), `2010AD`,`2017AD`) %>%
-  rename_with(~paste0('an_', .), all_of(unique(c(time_steps_millennia, time_steps_centuries, '2010AD', '2017AD')))) %>%
-  left_join(an12_dgg_inputs %>%
-              select(id, region_name) %>%
-              st_drop_geometry())
-```
-
 
 Fit a global GLM and one limited to natural areas and protected areas.
 
@@ -291,10 +305,11 @@ legacy_mods <- expand_grid(time_step = unique(c(time_steps_millennia,
 
 ```{r, fig.width=9, fig.height=3.5}
 global_plot <- global_summary %>%
-  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+ mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   filter(class != 'Ice') %>%
   ggplot(aes(time_step, percent_land_area)) +
-  geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
+  geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1) +
     geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
   geom_line(data = hyde_pop_all, aes(y = pop_percent), color = 'darkred', linetype = 1, group = 1, size = .8) +
   scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
@@ -316,6 +331,7 @@ global_plot
 ```{r, fig.width = 9, fig.height = 8}
 region_plot <- regional_summary %>% 
   filter(!is.na(region_name)) %>%
+    filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   ggplot(aes(time_step, percent_land_area)) +
   geom_col(aes(fill = class, color = class), width = .8, size = .1)+
@@ -341,6 +357,7 @@ fig2
 
 ```{r fig.width = 9, fig.height = 8}
 biome_plot <- biome_summary %>% 
+    filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter( class != 'NODATA', class != 'Ice', biome != 'Ice, snow') %>%
   ggplot(aes(time_step, percent_land_area)) +
@@ -366,6 +383,7 @@ fig3
 
 ```{r}
 contemp_plot <- contemp_summary %>%
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter(class != 'NODATA', class != 'Ice') %>%
   ggplot(aes(time_step, percent_land_area)) +
@@ -536,25 +554,12 @@ change_type %>% st_drop_geometry %>% count(class, wt =  land_area, name = 'area'
 ```
 
 ```{r}
-change_type %>% st_drop_geometry %>%  count(class_biome, wt =  land_area, name = 'area') %>% 
+change_type %>% count(class_biome, wt =  land_area, name = 'area') %>% 
   mutate(percent = area / sum(area) * 100) %>% write_csv('onsets_biome_area.csv')
 ```
 
-
 ```{r}
-change_type %>%
-mutate(class = factor(class, levels = c( "NEVR" , "SEMI" , "U0001" ,"U1500","U1850" ,"U1950" ,"RECNT")))  %>%
-  st_as_sf() %>%
- #    st_crop(st_bbox(c(xmin = 10, xmax = 50, ymin = 20, ymax = 50))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = class, geometry = geometry), color = NA, lwd = .1)+
-  scale_fill_viridis_d() +
-  theme_bw() +
-  coord_sf(crs = st_crs("+proj=eck4"))
-```
-
-```{r}
-write_csv(change_type %>% st_drop_geometry(), 'change_type.csv')
+write_csv(change_type, 'change_type.csv')
 ```
 
 
@@ -575,7 +580,7 @@ an12_dgg %>%
   group_by(id) %>%
   count %>%
   filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
   pull(land_area) %>%
   sum %>%
   `/`(total_land_area)%>%
@@ -587,7 +592,7 @@ an12_dgg %>%
   group_by(id) %>%
   count %>%
   filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
   pull(land_area) %>%
   sum %>%
   `/`(total_land_area)%>%
@@ -599,7 +604,7 @@ an12_dgg %>%
   group_by(id) %>%
   count %>%
   filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
   pull(land_area) %>%
   sum %>%
   `/`(total_land_area) %>%
@@ -618,7 +623,7 @@ an12_dgg %>%
   group_by(id) %>%
   count %>%
   filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
   pull(land_area) %>%
   sum %>%
   `/`(55432294)%>%
@@ -630,7 +635,7 @@ an12_dgg %>%
   group_by(id) %>%
   count %>%
   filter(n == 60) %>%
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
   pull(land_area) %>%
   sum %>%
   `/`(76287578)%>%
@@ -743,7 +748,7 @@ olson_key <- tibble(olson_biome = 1:14,
 ```
 
 ```{r}
-olson_summary <- an12_dgg_long %>% 
+olson_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline) %>%
   left_join(read_csv('tmp/olson_tmp.csv')) %>%
   filter(!(olson_biome %in% c(0, NA))) %>% # the NA's are from the land mask, but what about the 0's
   mutate(olson_biome = as.factor(olson_biome)) %>%
@@ -754,6 +759,7 @@ olson_summary <- an12_dgg_long %>%
 
 ```{r, fig.width=9, fig.height=10}
 olson_plot <- olson_summary %>%
+    filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter( class != 'NODATA') %>%
   ggplot(aes(time_step, percent_land_area)) +
@@ -804,13 +810,15 @@ biome_key_15 <- tibble(biome_value = 1:15,
                                        'Dense Shrubland', 'Open Shrubland',	'Tundra',	'Desert and Barren', 'Polar Desert, Rock, and Ice'))) %>%
   left_join(biome_key)
 
-biome15_summary <- an12_dgg_long %>%
+biome15_summary <- an12_dgg %>%
+  select(-upper, -lower) %>% rename(anthrome = baseline) %>%
   left_join(biome_key_15) %>%
   anthrome_trajectory(by = biome15)
 ```
 
 ```{r, fig.width=9, fig.height=10}
 biome15_plot <- biome15_summary %>%
+    filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter( class != 'NODATA') %>%
   ggplot(aes(time_step, percent_land_area)) +
