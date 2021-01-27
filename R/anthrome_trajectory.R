@@ -10,6 +10,7 @@
 anthrome_trajectory <- function(data, by = NULL) {
   data %>%
     left_join(anthrome_key, by = 'anthrome') %>% # join before counting so empty factor levels are preserved
+    # this .drop argument turns the ordered time step factor into an unordered factor . . . factor handling could be more consistent
     count(time_step, class, {{ by }}, wt = land_area, name = 'land_area', .drop = FALSE) %>%
     left_join(time_key, by = 'time_step') %>%
     mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',

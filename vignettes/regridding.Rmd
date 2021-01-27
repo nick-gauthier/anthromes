@@ -65,7 +65,7 @@ tgc_tbl <- read_csv('data/raw_data/three_conditions_v4_rep_data.csv') %>%
 
 ## NMH
 ```{r}
-nmh <- raster('../WCMC_natural_modified_habitat_screening_layer/natural_modified_habitat_screening_layer.tif')
+nmh <- raster('data/raw_data/WCMC_natural_modified_habitat_screening_layer/natural_modified_habitat_screening_layer.tif')
 
 nmh_tbl <- exact_extract(nmh, dgg_land, function(value, frac) tapply(frac, value, sum) / sum(frac)) %>% 
   map(~{if(length(.) == 0) c(`1` = NA, `2` = NA, `3` = NA, `4` = NA) else .}) %>% 

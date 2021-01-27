@@ -7,15 +7,12 @@ output: html_document
 
 # Setup
 
-
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
 library(tidyverse)
 library(sf)
 library(patchwork)
 devtools::load_all()
-legend_long <- image_ggplot(magick::image_read('../anthromes_legend_4_vertical_2021_01_18.png'))#anthromes_legend_3_vertical_v1.png'))
-legend_wide <- image_ggplot(magick::image_read('../anthromes_legend_4_2021_01_18.png'))
 ```
 
 Import preprocessed data.
@@ -40,6 +37,13 @@ an12_dgg <- an12_dgg_baseline %>%
   left_join(an12_dgg_inputs, by = 'id')
 
 rm(an12_dgg_baseline, an12_dgg_upper, an12_dgg_lower)
+```
+```{r}
+hyde_pop <- readRDS('data/derived_data/hyde_dgg') %>%
+  filter(var == 'popc') %>%
+  select(-var) %>%
+  pivot_longer(-ANL12_ID, names_to = 'time_step', values_to = 'population') %>%
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered))
 ```
 
 
@@ -71,7 +75,7 @@ regression_dat <- an12_dgg %>%
   rename_with(~paste0('an_', .), all_of(unique(c(time_steps_millennia, time_steps_centuries, '2010AD', '2017AD'))))
 ```
 
-# Analysis
+# Main Analysis
 ## Anthrome Trajectory Summaries
 
 Summary of global land area for each anthrome and broken down by region and biome.
@@ -225,14 +229,8 @@ contemp_summary %>%
 
 ## HYDE Population Curves
 
-Get HYDE population data.
+Process HYDE population data.
 ```{r}
-hyde_pop <- readRDS('data/derived_data/hyde_dgg') %>%
-  filter(var == 'popc') %>%
-  select(-var) %>%
-  pivot_longer(-ANL12_ID, names_to = 'time_step', values_to = 'population') %>%
-  mutate(time_step = ordered(time_step, levels = time_steps_ordered))
-
 hyde_pop_all <- hyde_pop %>%
   group_by(time_step) %>%
   summarise(population = sum(population)) %>%
@@ -441,7 +439,7 @@ ggsave('figures/anthromes_legacies.png', plot = fig4, height = 9, width = 8, dpi
 ```
 
 
-# Other Visualizations
+# Supplemental Analyses and Visualizations
 Other visualization and analyses not included in the main paper.
 
 ## Regional Breakdown
@@ -564,7 +562,7 @@ change_type %>%
   mutate(test = n / sum(n) * 100)
 ```
 
-## always uninhabited
+## Always Uninhabited
 does this end up being the same as the above analysis?
 ```{r}
 an12_dgg %>% 
@@ -861,4 +859,180 @@ pres_pred3 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
   mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(),
                         dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
   arrange(aic)
+```
+
+
+## Uncertainties
+
+```{r, eval = FALSE}
+an12_dgg_upper <- read_csv('tmp/an12_dgg_upper.csv', col_types = cols(.default = 'i')) %>%
+  dplyr::select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) %>% 
+  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>% 
+    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% # but join to biome key
+  select(-pot_vill, -pot_veg) %>%
+  pivot_longer(-c(id, land_area, biome, region_name), names_to = 'time_step', values_to = 'anthrome') 
+
+an12_dgg_lower <- read_csv('tmp/an12_dgg_lower.csv', col_types = cols(.default = 'i')) %>%
+  dplyr::select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) %>% 
+  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>% 
+    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% # but join to biome key
+  select(-pot_vill, -pot_veg) %>%
+  pivot_longer(-c(id, land_area, biome, region_name), names_to = 'time_step', values_to = 'anthrome') 
+```
+
+```{r}
+an12_dgg_lower <- an12_dgg %>% select(-baseline, -upper) %>% rename(anthrome = lower)
+an12_dgg_upper <- an12_dgg %>% select(-baseline, -lower) %>% rename(anthrome = upper)
+
+```
+
+
+```{r}
+global_summary_upper <- anthrome_trajectory(an12_dgg_upper)
+global_summary_lower <- anthrome_trajectory(an12_dgg_lower)
+regional_summary_upper <- anthrome_trajectory(an12_dgg_upper, by = region_name)
+regional_summary_lower <- anthrome_trajectory(an12_dgg_lower, by = region_name)
+biome_summary_upper <- anthrome_trajectory(an12_dgg_upper, by = biome)
+biome_summary_lower <- anthrome_trajectory(an12_dgg_lower, by = biome)
+```
+
+```{r fig.width=9, fig.height=7}
+a <- global_summary_upper %>%
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter(class != 'Ice', class != 'NODATA') %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
+    geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  facet_grid(~period, scales = 'free_x', space = 'free') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0,0), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land area', subtitle = 'Upper scenario') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+b <- global_summary_lower %>%
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter(class != 'Ice', class != 'NODATA') %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), position = 'fill', width = .8, size = .1)+
+    geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  facet_grid(~period, scales = 'free_x', space = 'free') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0,0), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land area', subtitle = 'Lower scenario') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+c <- a / b + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
+d <- wrap_elements(full = c) + legend_long + plot_layout(widths = c(3.5, 1))
+```
+
+```{r}
+ggsave('figures/anthrome_uncertainty_global.png', d, width = 9, height = 7)
+```
+
+
+```{r fig.width = 11, fig.height = 8}
+e <- regional_summary_upper %>%  filter(!is.na(region_name)) %>%
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1) +
+  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
+  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  facet_wrap(~region_name, ncol = 2) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land area', subtitle = 'Upper scenario') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+f <- regional_summary_lower %>% filter(!is.na(region_name)) %>%
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
+  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  facet_wrap(~region_name, ncol = 2) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land area', subtitle = 'Lower scenario') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+#addSmallLegend(e) + addSmallLegend(f) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
+
+g <- e + f + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
+
+h <- wrap_elements(full = g) / legend_wide + plot_layout(heights = c(4, 1))
+```
+
+```{r}
+ggsave('figures/anthrome_uncertainty_regions.png', h, width = 11, height = 8, dpi = 600)
+```
+
+
+
+```{r, fig.width = 11, fig.height = 8}
+i <- biome_summary_upper %>% 
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter( class != 'NODATA', class != 'Ice', biome != 'Ice, snow') %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
+  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  facet_wrap(~biome, ncol = 2, dir = 'v') +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land surface', subtitle = 'Upper scenario') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+j <- biome_summary_lower %>% 
+      filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter( class != 'NODATA', class != 'Ice', biome != 'Ice, snow') %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
+  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  facet_wrap(~biome, ncol = 2, dir = 'v') +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land surface', subtitle = 'Lower scenario') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+#addSmallLegend(g) + addSmallLegend(h) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
+
+k <- i + j + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
+
+l <- wrap_elements(full = k) / legend_wide + plot_layout(heights = c(4, 1))
+l
+```
+
+```{r}
+ggsave('figures/anthrome_uncertainty_biomes.png', l, width = 11, height = 8, dpi = 600)
 ```

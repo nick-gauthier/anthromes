@@ -32,12 +32,6 @@ anthrome_key <- tibble(
                   'Cultured', 'Wild', 'Wild', 'Wild', 'NODATA'), levels = c('Intensive', 'Cultured', 'Wild', 'NODATA'))
 )
 
-#anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6',
-#                          '#FF73DF', '#00FFC5', '#E6E600', '#FFFF73', '#FFFFBE',
-#                          '#E69800', '#FFD37F', '#FFEBAF', '#38A800', '#A5F57A',
-#                          '#D3FFB2', '#B2B2B2', '#DAF2EA', '#E1E1E1', '#FAFFFF', NA) %>%
-#  setNames(anthrome_key$class)
-
 anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6',
                           '#FF73DF', '#00FFC5', '#E6E600', '#FFFF73', '#FFFFBE',
                           '#E69800', '#FFD37F', '#FFEBAF', '#38A800', '#A5F57A',
@@ -47,7 +41,6 @@ anthrome_class_color <- c('#A80000', '#FF0000', '#0070FF', '#00A9E6', '#A900E6',
 anthrome_level_color <- c('Dense settlements' = '#CD6666', 'Villages' = '#AA66CD', 'Croplands' = '#FFFF00',
                           'Rangelands' = '#FFAA00', 'Cultured' = '#D3FFBE', 'Wildlands' = '#38A800', NODATA = NA)
 
-#anthrome_type_color <- c('Intensive' = '#EDCDCB', 'Cultured' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
 anthrome_type_color <- c('Intensive' = '#EDCDCB', 'Cultured' = '#FFFFFF', 'Wild' = '#CADAA9', NODATA = NA)
 
 anthrome_colors <- c(anthrome_class_color, anthrome_level_color, anthrome_type_color)
