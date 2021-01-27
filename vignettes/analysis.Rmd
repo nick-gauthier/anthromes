@@ -14,8 +14,8 @@ library(tidyverse)
 library(sf)
 library(patchwork)
 devtools::load_all()
-legend_long <- image_ggplot(magick::image_read('anthromes_legend_3_vertical_v1.png'))
-legend_wide <- image_ggplot(magick::image_read('anthromes_legend_3.png'))
+legend_long <- image_ggplot(magick::image_read('../anthromes_legend_4_vertical_2021_01_18.png'))#anthromes_legend_3_vertical_v1.png'))
+legend_wide <- image_ggplot(magick::image_read('../anthromes_legend_4_2021_01_18.png'))
 ```
 
 Import preprocessed data.
@@ -434,13 +434,6 @@ fig4
 ### Save figures
 
 ```{r}
-# save vector graphics for high quality figures
-# ggsave('figures/anthrome_summary_global.svg', plot = global_plot, width = 9, height = 3.5)
-# ggsave('figures/anthromes_summary_region.svg', plot = addSmallLegend(region_plot) + guides(color = FALSE), height = 8, width = 9)
-# ggsave('figures/anthromes_summary_biome.svg', plot = addSmallLegend(biome_plot), height = 8, width = 9)
-# ggsave('figures/anthromes_legacies.svg', plot = fig4, height = 9, width = 8)
-
-# save pngs for drafts and email
 ggsave('figures/anthrome_summary_global.png', plot = global_plot, width = 9, height = 3.5, dpi = 600)
 ggsave('figures/anthromes_summary_region.png', plot = fig2, height = 8, width = 9, dpi = 600)
 ggsave('figures/anthromes_summary_biome.png', plot = fig3, height = 8, width = 9, dpi = 600)
