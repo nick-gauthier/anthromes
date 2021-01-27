@@ -38,6 +38,7 @@ an12_dgg <- an12_dgg_baseline %>%
 
 rm(an12_dgg_baseline, an12_dgg_upper, an12_dgg_lower)
 ```
+
 ```{r}
 hyde_pop <- readRDS('data/derived_data/hyde_dgg') %>%
   filter(var == 'popc') %>%
@@ -45,7 +46,6 @@ hyde_pop <- readRDS('data/derived_data/hyde_dgg') %>%
   pivot_longer(-ANL12_ID, names_to = 'time_step', values_to = 'population') %>%
   mutate(time_step = ordered(time_step, levels = time_steps_ordered))
 ```
-
 
 ```{r}
 total_land_area <- sum(an12_dgg_inputs$land_area)
@@ -80,9 +80,20 @@ regression_dat <- an12_dgg %>%
 
 Summary of global land area for each anthrome and broken down by region and biome.
 ```{r, cache = TRUE}
-global_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline)  %>% anthrome_trajectory()
-regional_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline)  %>% anthrome_trajectory(by = region_name)
-biome_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline)  %>% anthrome_trajectory(by = biome)
+global_summary <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>% 
+  anthrome_trajectory()
+
+regional_summary <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>% 
+  anthrome_trajectory(by = region_name)
+
+biome_summary <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>% 
+  anthrome_trajectory(by = biome)
 ```
 
 Do the same thing for conservation and biodiversity variables. Note the distinction between the filtered variables and the summed ones for which the preprocessing is more complex.
@@ -507,16 +518,19 @@ ggsave('figures/anthromes_legacies_regions.svg', height = 8, width = 7.2)
 ## Onsets
 
 ```{r}
-intensive_onset <- an12_dgg %>%
-    pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+# this could be a function?
+intensive_onset <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>% 
     group_by(id) %>%
     filter(anthrome <= 43) %>%
     left_join(time_key) %>%
     summarise(intensive_onset = min(year, na.rm = TRUE))
 
-change_type <- an12_dgg %>%
-    pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
-      group_by(id) %>%
+change_type <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>%
+  group_by(id) %>%
   summarise(intensive = any(anthrome <= 43), cultured = any(anthrome <= 54)) %>%
   left_join(intensive_onset, by = 'id') %>%
   mutate(class = case_when(intensive == TRUE & intensive_onset <= 1 ~'U0001', # fyi case when statement evaluates in order
@@ -527,8 +541,8 @@ change_type <- an12_dgg %>%
                             cultured == TRUE ~ 'SEMI',
                             TRUE  ~ 'NEVR')) %>%
   left_join(an12_dgg_inputs, ., by = 'id') %>%
-  mutate(class_biome = if_else(pot_veg <= 8, paste0('W_', class), paste('N_', class))) %>%
-  select(id, land_area, class, class_biome, geometry)
+  mutate(class_biome = if_else(biome %in% biome_key$biome[1:8], paste0('W_', class), paste('N_', class))) %>% #distingguish woody from nonwoody biomes
+  select(id, land_area, class, class_biome)
 ```
 
 ```{r}
@@ -540,27 +554,23 @@ change_type %>% pull(land_area) %>% sum
 ```
 
 ```{r}
-change_type %>% st_drop_geometry %>% count(class, wt =  land_area, name = 'area') %>% 
-  mutate(percent = area / sum(area) * 100)%>%  write_csv('onsets_simple_area.csv')
+change_type %>% 
+  count(class, wt =  land_area, name = 'area') %>% 
+  mutate(percent = area / sum(area) * 100) %>% 
+  write_csv('onsets_simple_area.csv')
 ```
 
 ```{r}
-change_type %>% count(class_biome, wt =  land_area, name = 'area') %>% 
-  mutate(percent = area / sum(area) * 100) %>% write_csv('onsets_biome_area.csv')
+change_type %>% 
+  count(class_biome, wt =  land_area, name = 'area') %>% 
+  mutate(percent = area / sum(area) * 100) %>% 
+  write_csv('onsets_biome_area.csv')
 ```
 
 ```{r}
 write_csv(change_type, 'change_type.csv')
 ```
 
-
-```{r}
-change_type %>%
-  group_by(change) %>%
-  count() %>%
-  ungroup() %>%
-  mutate(test = n / sum(n) * 100)
-```
 
 ## Always Uninhabited
 does this end up being the same as the above analysis?
@@ -864,36 +874,37 @@ pres_pred3 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
 
 ## Uncertainties
 
-```{r, eval = FALSE}
-an12_dgg_upper <- read_csv('tmp/an12_dgg_upper.csv', col_types = cols(.default = 'i')) %>%
-  dplyr::select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) %>% 
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>% 
-    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% # but join to biome key
-  select(-pot_vill, -pot_veg) %>%
-  pivot_longer(-c(id, land_area, biome, region_name), names_to = 'time_step', values_to = 'anthrome') 
-
-an12_dgg_lower <- read_csv('tmp/an12_dgg_lower.csv', col_types = cols(.default = 'i')) %>%
-  dplyr::select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) %>% 
-  left_join(st_drop_geometry(an12_dgg_inputs), by = 'id') %>% 
-    left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% # but join to biome key
-  select(-pot_vill, -pot_veg) %>%
-  pivot_longer(-c(id, land_area, biome, region_name), names_to = 'time_step', values_to = 'anthrome') 
-```
-
 ```{r}
-an12_dgg_lower <- an12_dgg %>% select(-baseline, -upper) %>% rename(anthrome = lower)
-an12_dgg_upper <- an12_dgg %>% select(-baseline, -lower) %>% rename(anthrome = upper)
+# could modify anthrome trajectory function so it computes uncertainties automatically . . .
+global_summary_upper <- an12_dgg %>% 
+  select(-baseline, -lower) %>% 
+  rename(anthrome = upper) %>%
+  anthrome_trajectory()
 
-```
+global_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>%
+  anthrome_trajectory()
 
+regional_summary_upper <- an12_dgg %>% 
+  select(-baseline, -lower) %>% 
+  rename(anthrome = upper) %>%
+  anthrome_trajectory(by = region_name)
 
-```{r}
-global_summary_upper <- anthrome_trajectory(an12_dgg_upper)
-global_summary_lower <- anthrome_trajectory(an12_dgg_lower)
-regional_summary_upper <- anthrome_trajectory(an12_dgg_upper, by = region_name)
-regional_summary_lower <- anthrome_trajectory(an12_dgg_lower, by = region_name)
-biome_summary_upper <- anthrome_trajectory(an12_dgg_upper, by = biome)
-biome_summary_lower <- anthrome_trajectory(an12_dgg_lower, by = biome)
+regional_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>%
+  anthrome_trajectory(by = region_name)
+
+biome_summary_upper <- an12_dgg %>% 
+  select(-baseline, -lower) %>% 
+  rename(anthrome = upper) %>%
+  anthrome_trajectory(by = biome)
+
+biome_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>% 
+  anthrome_trajectory(by = biome)
 ```
 
 ```{r fig.width=9, fig.height=7}
@@ -975,8 +986,6 @@ f <- regional_summary_lower %>% filter(!is.na(region_name)) %>%
   labs(x = 'Year', y = 'Percent land area', subtitle = 'Lower scenario') +
   theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
 
-#addSmallLegend(e) + addSmallLegend(f) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
-
 g <- e + f + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
 h <- wrap_elements(full = g) / legend_wide + plot_layout(heights = c(4, 1))
@@ -985,8 +994,6 @@ h <- wrap_elements(full = g) / legend_wide + plot_layout(heights = c(4, 1))
 ```{r}
 ggsave('figures/anthrome_uncertainty_regions.png', h, width = 11, height = 8, dpi = 600)
 ```
-
-
 
 ```{r, fig.width = 11, fig.height = 8}
 i <- biome_summary_upper %>% 
@@ -1024,8 +1031,6 @@ j <- biome_summary_lower %>%
                    labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land surface', subtitle = 'Lower scenario') +
   theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
-
-#addSmallLegend(g) + addSmallLegend(h) + plot_layout(guides = 'collect') + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')') & theme(legend.position = 'bottom')
 
 k <- i + j + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
