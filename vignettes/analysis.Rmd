@@ -71,7 +71,7 @@ regression_dat <- an12_dgg %>%
   select(id, time_step, region_name, land_area, class) %>%
   pivot_wider(names_from = time_step, values_from = class) %>%
   left_join(select(contemp_vars, -land_area), by = 'id') %>%
-  na.omit %>%
+  na.omit() %>%
   rename_with(~paste0('an_', .), all_of(unique(c(time_steps_millennia, time_steps_centuries, '2010AD', '2017AD'))))
 ```
 
@@ -102,22 +102,20 @@ ind_summary <- contemp_vars %>%
   select(id, ind_cnt) %>%
   rename(land_area = ind_cnt) %>%
   remove_missing() %>%
-  # so this join here has two land areas . . . how to handle?
+  # so this join here has two land areas . . . better way to handle than this select?
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% 
+  select(-lower, -upper) %>% 
   rename(anthrome = baseline) %>%
- # pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Indigenous Lands')
 
 pa_summary <- contemp_vars %>%
   select(id, pa_km2) %>%
-    rename(land_area = pa_km2) %>%
+  rename(land_area = pa_km2) %>%
   remove_missing() %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% 
+  select(-lower, -upper) %>% 
   rename(anthrome = baseline) %>%
- # pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
   anthrome_trajectory() %>%
   mutate(var = 'Protected Areas')
 
@@ -126,8 +124,7 @@ kba_summary <- contemp_vars %>%
   rename(land_area = kba_km2) %>%
   remove_missing() %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
-#  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(-lower, -upper) %>% rename(anthrome = baseline)%>%
   anthrome_trajectory() %>%
   mutate(var = 'Key Biodiversity Areas')
 
@@ -135,23 +132,19 @@ unused_summary <- contemp_vars %>%
   select(id, land_area) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
   filter(time_step == '2017AD', baseline >= 50) %>%
-  #filter(`2017AD` >= 50)  %>% # unused lands in 2017
   select(id, land_area) %>%
-    #rename(land_area = land_area) %>%
   remove_missing() %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
-#  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(-lower, -upper) %>% rename(anthrome = baseline)%>%
   anthrome_trajectory() %>%
-    mutate(var = 'Cultured and Wildlands (2017)')
-  
+  mutate(var = 'Cultured and Wildlands (2017)')
+
 nmh3_summary <- contemp_vars %>%
   mutate(nmh3_km2 = nmh3 * land_area) %>%
   select(id, nmh3_km2) %>%
-    rename(land_area = nmh3_km2) %>%
+  rename(land_area = nmh3_km2) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% rename(anthrome = baseline) %>%
-  #pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(-lower, -upper) %>% rename(anthrome = baseline) %>%
   anthrome_trajectory() %>%
   mutate(var = 'Potential Natural (NMH)')
 
@@ -160,28 +153,23 @@ nmh4_summary <- contemp_vars %>%
   select(id, nmh4_km2) %>%
   rename(land_area = nmh4_km2) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
-  #pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(-lower, -upper) %>% rename(anthrome = baseline)%>%
   anthrome_trajectory() %>%
   mutate(var = 'Likely Natural (NMH)')
 
 shared_3gc_summary <- contemp_vars %>%
   filter(tgc == 2) %>%
   select(id, land_area) %>%
- # rename(land_area = land_ar) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% rename(anthrome = baseline) %>%
-  #pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(-lower, -upper) %>% rename(anthrome = baseline) %>%
   anthrome_trajectory() %>%
   mutate(var = 'Shared Lands (3GC)')
 
 wild_3gc_summary <- contemp_vars %>%
   filter(X_3_c_4 == 3) %>%
   select(id, land_area) %>%
- # rename(land_area = land_ar) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
-   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
-#  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'anthrome') %>%
+  select(-lower, -upper) %>% rename(anthrome = baseline)%>%
   anthrome_trajectory() %>%
   mutate(var = 'Large Wild Areas (3GC)')
 
@@ -192,8 +180,8 @@ contemp_summary <- bind_rows(kba_summary, pa_summary,
   # make sure they plot in the right order
   mutate(var = factor(var, levels = c('Key Biodiversity Areas', 'Protected Areas',
                                       'Indigenous Lands', 'Cultured and Wildlands (2017)', 
-                                        'Potential Natural (NMH)',  'Likely Natural (NMH)', 
-                                        'Shared Lands (3GC)', 'Large Wild Areas (3GC)')))
+                                      'Potential Natural (NMH)',  'Likely Natural (NMH)', 
+                                      'Shared Lands (3GC)', 'Large Wild Areas (3GC)')))
 
 rm(kba_summary, pa_summary, ind_summary, unused_summary, nmh3_summary, nmh4_summary, shared_3gc_summary, wild_3gc_summary)
 ```
@@ -242,44 +230,11 @@ contemp_summary %>%
 
 Process HYDE population data.
 ```{r}
-hyde_pop_all <- hyde_pop %>%
-  group_by(time_step) %>%
-  summarise(population = sum(population)) %>%
-    mutate(pop_percent = population / max(population)) %>%
-  left_join(time_key, by = 'time_step') %>%
-  filter(!(year %in% c(2001:2009,2011:2016))) %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades')))
+hyde_pop_all <- get_hyde_pop(hyde_pop) 
   
-hyde_pop_regions <- hyde_pop %>%
-  left_join(an12_dgg_inputs, by = c('ANL12_ID' = 'id')) %>%
-  group_by(region_name, time_step) %>%
-  summarise(population = sum(population)) %>%
-  mutate(pop_percent = population / max(population)) %>%
-  ungroup() %>%
-  left_join(time_key, by = 'time_step') %>%
-    filter(!(year %in% c(2001:2009,2011:2016))) %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades')))
+hyde_pop_regions <- get_hyde_pop(hyde_pop, by = region_name) 
 
-hyde_pop_biomes <- hyde_pop %>%
-  left_join(an12_dgg_inputs, by = c('ANL12_ID' = 'id')) %>%
-   # left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>%
-  #select(-pot_veg) %>%
-  group_by(biome, time_step) %>%
-  summarise(population = sum(population)) %>%
-  mutate(pop_percent = population / max(population)) %>%
-  ungroup() %>%
-  left_join(time_key, by = 'time_step') %>%
-    filter(!(year %in% c(2001:2009,2011:2016))) %>%
-  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
-                            year %in% seq(100, 1700, 100) ~ 'Centuries',
-                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
-         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
+hyde_pop_biomes <- get_hyde_pop(hyde_pop, by = biome) %>%
     filter(biome != 'Ice, snow')
 ```
 
@@ -287,6 +242,13 @@ hyde_pop_biomes <- hyde_pop %>%
 ## Anthrome Legacies
 
 Fit a global GLM and one limited to natural areas and protected areas.
+```{r}
+calc_aic <- function(predictand, predictor, fam, dat){
+  as.formula(paste(predictand, '~', predictor)) %>%
+    glm(family = fam, data = dat) %>%
+    AIC
+}
+```
 
 ```{r, cache = TRUE}
 legacy_mods <- expand_grid(time_step = unique(c(time_steps_millennia, 
@@ -300,7 +262,7 @@ legacy_mods <- expand_grid(time_step = unique(c(time_steps_millennia,
                         calc_aic, dat = filter(regression_dat, nmh_34 > 0.5)),
          pa_aic = pmap_dbl(list(predictands, predictors, fam), 
                         calc_aic, dat = filter(regression_dat, pa50 == TRUE)),
-          ind_aic = pmap_dbl(list(predictands, predictors, fam), 
+        ind_aic = pmap_dbl(list(predictands, predictors, fam), 
                         calc_aic, dat = filter(regression_dat, ind50 == TRUE))) %>%
   pivot_longer(global_aic:ind_aic) %>%
   group_by(predictands, name) %>%
@@ -799,8 +761,6 @@ biome15_plot <- biome15_summary %>%
 
 biome15_plot + legend_long + plot_layout(widths = c(3, 1))
 ```
-
-
 
 ```{r}
 ggsave('figures/biomes15.png', biome15_plot + legend_long + plot_layout(widths = c(3, 1))
