@@ -25,9 +25,9 @@ an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp') %>%
   left_join(biome_key, by = c('pot_veg' = 'biome_value')) %>% 
   select(-pot_vill, -pot_veg)
 
-an12_dgg_baseline <- read_anthromes('an12_dgg.csv')
-an12_dgg_upper <- read_anthromes('tmp/an12_dgg_upper.csv')
-an12_dgg_lower <- read_anthromes('tmp/an12_dgg_lower.csv')
+an12_dgg_baseline <- read_anthromes('an12_dgg_baseline.csv')
+an12_dgg_upper <- read_anthromes('an12_dgg_upper.csv')
+an12_dgg_lower <- read_anthromes('an12_dgg_lower.csv')
 
 an12_dgg <- an12_dgg_baseline %>%
   rename(baseline = anthrome) %>%
@@ -166,7 +166,7 @@ shared_3gc_summary <- contemp_vars %>%
   mutate(var = 'Shared Lands (3GC)')
 
 wild_3gc_summary <- contemp_vars %>%
-  filter(X_3_c_4 == 3) %>%
+  filter(tgc == 3) %>%
   select(id, land_area) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
   select(-lower, -upper) %>% rename(anthrome = baseline)%>%
@@ -673,7 +673,7 @@ olson_key <- tibble(olson_biome = 1:14,
 
 ```{r}
 olson_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline) %>%
-  left_join(read_csv('tmp/olson_tmp.csv')) %>%
+  left_join(read_csv('olson_tmp.csv')) %>%
   filter(!(olson_biome %in% c(0, NA))) %>% # the NA's are from the land mask, but what about the 0's
   mutate(olson_biome = as.factor(olson_biome)) %>%
   anthrome_trajectory(by = olson_biome) %>%
