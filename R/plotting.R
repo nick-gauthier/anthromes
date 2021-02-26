@@ -5,5 +5,5 @@ ggplot2::ggplot(data.frame(x = 0, y = 0), ggplot2::aes_string('x', 'y')) + ggplo
 }
 
 # load in legends
-legend_long <- image_ggplot(magick::image_read('vignettes/anthromes_legend_4_vertical_2021_01_18.png'))
-legend_wide <- image_ggplot(magick::image_read('vignettes/anthromes_legend_4_2021_01_18.png'))
+legend_long <- image_ggplot(magick::image_read('analysis/figures/anthromes_legend_4_vertical_2021_01_18.png'))
+legend_wide <- image_ggplot(magick::image_read('analysis/figures/anthromes_legend_4_2021_01_18.png'))
