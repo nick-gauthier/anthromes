@@ -14,8 +14,7 @@ output:
 
 Load **tidyverse** and **sf** packages for data summaries and visualization, and **patchwork** for multi-panel plots. Also load this package, **anthromes** for additional analysis and plotting functions.
 
-```{r setup, include=FALSE}
-knitr::opts_chunk$set(echo = TRUE)
+```{r setup, message=FALSE}
 library(tidyverse)
 library(sf)
 library(patchwork)
@@ -26,7 +25,7 @@ Import the precomputed Anthromes-12k-DGG dataset. These include fixed inputs lik
 
 ```{r}
 # HYDE/Anthromes fixed inputs
-an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp') %>% 
+an12_dgg_inputs <- read_sf('data/an12_dgg_inputs.shp') %>% 
   st_drop_geometry() %>% # don't need the locations
   rename(land_area = land_ar, pot_vill = pot_vll, region_name = regn_nm) %>%
   mutate(region_name = if_else( # fix the region name
@@ -38,9 +37,9 @@ an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp') %>%
 
 ```{r}
 # Baseline, upper, and lower scenarios
-an12_dgg_baseline <- read_anthromes('an12_dgg_baseline.csv')
-an12_dgg_upper <- read_anthromes('an12_dgg_upper.csv')
-an12_dgg_lower <- read_anthromes('an12_dgg_lower.csv')
+an12_dgg_baseline <- read_anthromes('data/an12_dgg_baseline.csv')
+an12_dgg_upper <- read_anthromes('data/an12_dgg_upper.csv')
+an12_dgg_lower <- read_anthromes('data/an12_dgg_lower.csv')
 
 # Combine in one tibble
 an12_dgg <- an12_dgg_baseline %>%
@@ -70,7 +69,7 @@ Import contemporary biodiversity and conservation variables.
 ```{r}
 total_land_area <- sum(an12_dgg_inputs$land_area)
 
-contemp_vars <- read_sf('contemp_vars.shp') %>%
+contemp_vars <- read_sf('data/contemp_vars.shp') %>%
   st_drop_geometry() %>%
   mutate(
     land_area = land_ar,
@@ -114,7 +113,7 @@ The code below is sufficient to reproduce the analysis presented in the main tex
 
 ## Anthrome Trajectory Summaries
 
-Create summaries of global land areas for each anthrome along with breakdowns by region and biome.
+Create summaries of global land areas for each anthrome along with breakdowns by region and biome. See the documentaiton for the *anthrome_trajectory()* function for more details.
 ```{r, cache = TRUE}
 global_summary <- an12_dgg %>% 
   select(-lower, -upper) %>% 
@@ -361,7 +360,7 @@ Reproduce all the figures in the main paper using the analyses run above. Please
 
 ## Figure 1 - Global Summary
 
-```{r, fig.width=9, fig.height=3.5, include = FALSE}
+```{r, fig.width=9, fig.height=3.5, echo = FALSE, warning=FALSE}
 global_plot <- global_summary %>%
  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
   filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
@@ -386,7 +385,7 @@ global_plot
 
 ## Figure 2 - Regional Summary
 
-```{r, fig.width = 9, fig.height = 8, include = FALSE}
+```{r, fig.width = 9, fig.height = 8, echo = FALSE, warning=FALSE}
 region_plot <- regional_summary %>% 
   filter(!is.na(region_name)) %>%
     filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
@@ -413,7 +412,7 @@ fig2
 
 ## Figure 3 - Biome summary
 
-```{r fig.width = 9, fig.height = 8, include = FALSE}
+```{r fig.width = 9, fig.height = 8, echo = FALSE, warning=FALSE}
 biome_plot <- biome_summary %>% 
     filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -439,7 +438,7 @@ fig3
 
 ## Figure 4 - Contemporary Data
 
-```{r, include = FALSE}
+```{r, include = FALSE, warning=FALSE}
 contemp_plot <- contemp_summary %>%
       filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -457,24 +456,22 @@ contemp_plot <- contemp_summary %>%
                    labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
   labs(x = 'Year', y = 'Percent land surface') +
   theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
-
-contemp_plot + legend_long + plot_layout(widths = c(3, 1))
 ```
  
-```{r, include = FALSE}
+```{r, include = FALSE, warning=FALSE}
 legacy_plot <- legacy_mods %>%
   left_join(time_key) %>%
   mutate(vars = factor(predictands, levels = rev(c('v_rich', 'v_thr', 'kba50'))),
-         name = case_when(str_detect(name, 'global') ~ 'Global Lands',
-                          str_detect(name, 'nmh') ~ 'Likely and Potential Natural Lands (NMH)',
-                          str_detect(name, 'pa') ~ 'Protected Areas',
-                          str_detect(name, 'ind') ~ 'Indigenous Lands')) %>%
+         name = case_when(str_detect(domain, 'global') ~ 'Global Lands',
+                          str_detect(domain, 'nmh') ~ 'Likely and Potential Natural Lands (NMH)',
+                          str_detect(domain, 'pa') ~ 'Protected Areas',
+                          str_detect(domain, 'ind') ~ 'Indigenous Lands')) %>%
   ggplot(aes(as.factor(year), vars, fill = aic_scaled), color = 'white') +
   geom_tile() +
   geom_vline(xintercept = '1', color = 'red', linetype = 2) +
   scale_fill_viridis_c(name = '', breaks = c(.05, .95), trans = 'reverse', labels = c('More informative', 'Less informative')) +
   theme_classic() +
-  facet_wrap(~name, ncol = 1) +
+  facet_wrap(~domain, ncol = 1) +
   scale_y_discrete(labels = c('Key Biodiversity Areas', 'Threatened Species Richness', 'Species Richness')) +
   scale_x_discrete(breaks = c(-10000, -5000, 1, 500, 1000, 1500, 2000),
                    labels = c('10000ᴄᴇ', '5000ᴄᴇ', '1ᴄᴇ', '500ᴄᴇ', '1000ᴄᴇ', '1500ᴄᴇ', '2000ᴄᴇ'))  +
@@ -482,7 +479,7 @@ legacy_plot <- legacy_mods %>%
   theme(strip.background = element_blank(), axis.text=element_text(size=rel(0.8)), legend.position = 'bottom')
 ```
 
-```{r, fig.width=8, fig.height =9, include = FALSE}
+```{r, fig.width=8, fig.height =9, echo = FALSE, warning=FALSE}
 fig4 <- (wrap_elements(full = contemp_plot + legend_long + plot_layout(widths = c(3, 1))) / legacy_plot) + plot_layout(heights = c(1.5,1)) + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')')
 
 fig4
@@ -500,11 +497,9 @@ ggsave('figures/anthromes_legacies.png', plot = fig4, height = 9, width = 8, dpi
 
 # Supplemental Analyses and Figures
 Other visualization and analyses not included in the main paper.
-```{r}
-knitr::knit_exit()
-```
 
 ## Uncertainties
+Visualize the anthrome uncertainties using the HYDE 3.2 upper and lower scenarios in the same way as above.
 
 ```{r}
 # could modify anthrome trajectory function so it computes uncertainties automatically . . .
@@ -539,7 +534,7 @@ biome_summary_lower <- an12_dgg %>%
   anthrome_trajectory(by = biome)
 ```
 
-```{r fig.width=9, fig.height=7}
+```{r fig.width=9, fig.height=7, echo = FALSE, warning=FALSE}
 a <- global_summary_upper %>%
       filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -578,12 +573,12 @@ c <- a / b + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')
 d <- wrap_elements(full = c) + legend_long + plot_layout(widths = c(3.5, 1))
 ```
 
-```{r}
+```{r, include = FALSE}
 ggsave('figures/anthrome_uncertainty_global.png', d, width = 9, height = 7)
 ```
 
 
-```{r fig.width = 11, fig.height = 8}
+```{r fig.width = 11, fig.height = 8, echo=FALSE, warning=FALSE}
 e <- regional_summary_upper %>%  filter(!is.na(region_name)) %>%
       filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -623,11 +618,11 @@ g <- e + f + plot_annotation(tag_levels = 'a', tag_prefix = '(', tag_suffix = ')
 h <- wrap_elements(full = g) / legend_wide + plot_layout(heights = c(4, 1))
 ```
 
-```{r}
+```{r, include = FALSE}
 ggsave('figures/anthrome_uncertainty_regions.png', h, width = 11, height = 8, dpi = 600)
 ```
 
-```{r, fig.width = 11, fig.height = 8}
+```{r, fig.width = 11, fig.height = 8, echo = FALSE, warning = FALSE}
 i <- biome_summary_upper %>% 
       filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -670,13 +665,13 @@ l <- wrap_elements(full = k) / legend_wide + plot_layout(heights = c(4, 1))
 l
 ```
 
-```{r}
+```{r, include = FALSE}
 ggsave('figures/anthrome_uncertainty_biomes.png', l, width = 11, height = 8, dpi = 600)
 ```
 
 
 ## Onsets
-
+Calculate the onset timing of intensive anthromes.
 ```{r}
 # this could be a function?
 intensive_onset <- an12_dgg %>% 
@@ -686,7 +681,10 @@ intensive_onset <- an12_dgg %>%
     filter(anthrome <= 43) %>%
     left_join(time_key) %>%
     summarise(intensive_onset = min(year, na.rm = TRUE))
+```
 
+Classify the different onset timings for easier visualization.
+```{r}
 change_type <- an12_dgg %>% 
   select(-lower, -upper) %>% 
   rename(anthrome = baseline) %>%
@@ -705,71 +703,41 @@ change_type <- an12_dgg %>%
   select(id, land_area, class, class_biome)
 ```
 
+Print the outputs here.
 ```{r}
 change_type %>% 
   count(class, wt =  land_area, name = 'area') %>% 
   mutate(percent = area / sum(area) * 100)
 ```
 
+Same as above, but broken down by woody and non-woody biomes.
 ```{r}
 change_type %>% 
   count(class_biome, wt =  land_area, name = 'area') %>% 
   mutate(percent = area / sum(area) * 100)
 ```
 
+The visualizations for this map were done separately in ArcGIS. Save out the required .csv here.
 ```{r}
 write_csv(change_type, 'data/derived_data/change_type.csv')
 ```
 
 ## Olson Biomes
 
+Rerun the biome-level analysis using the Olson Biomes. 
 ```{r}
-olson_key <- tibble(olson_biome = 1:14,
-                    olson_name = factor(
-                      c('Tropical & Subtropical Moist Broadleaf Forests',
-                        'Tropical & Subtropical Dry Broadleaf Forests',
-                        'Tropical & Subtropical Coniferous Forests',
-                        'Temperate Broadleaf & Mixed Forests',
-                        'Temperate Conifer Forests',
-                        'Boreal Forests/Taiga',
-                        'Tropical & Subtropical Grasslands, Savannas & Shrublands',
-                        'Temperate Grasslands, Savannas & Shrublands',
-                        'Flooded Grasslands & Savannas',
-                        'Montane Grasslands & Shrublands',
-                        'Tundra',
-                        'Mediterranean Forests, Woodlands & Scrub',
-                        'Deserts & Xeric Shrublands',
-                        'Mangroves'),
-                      levels = c(
-                        'Tropical & Subtropical Moist Broadleaf Forests',
-                        'Tropical & Subtropical Dry Broadleaf Forests',
-                        'Tropical & Subtropical Coniferous Forests',
-                        'Temperate Broadleaf & Mixed Forests',
-                        'Temperate Conifer Forests',
-                        'Boreal Forests/Taiga',
-                        'Tropical & Subtropical Grasslands, Savannas & Shrublands',
-                        'Temperate Grasslands, Savannas & Shrublands',
-                        'Flooded Grasslands & Savannas',
-                        'Montane Grasslands & Shrublands',
-                        'Tundra',
-                        'Mediterranean Forests, Woodlands & Scrub',
-                        'Deserts & Xeric Shrublands',
-                        'Mangroves'
-                      )
-                    ))
-```
-
-```{r}
-olson_summary <- an12_dgg %>% select(-lower, -upper) %>% rename(anthrome = baseline) %>%
-  left_join(read_csv('olson_tmp.csv')) %>%
-  filter(!(olson_biome %in% c(0, NA))) %>% # the NA's are from the land mask, but what about the 0's
+olson_summary <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>%
+  left_join(read_csv('data/olson_biomes.csv')) %>%
+  filter(!(olson_biome %in% c(0, NA))) %>% # the NAs are from the land mask, but what about the 0's
   mutate(olson_biome = as.factor(olson_biome)) %>%
   anthrome_trajectory(by = olson_biome) %>%
   mutate(olson_biome = as.numeric(olson_biome)) %>%
   left_join(olson_key)
 ```
 
-```{r, fig.width=9, fig.height=10}
+```{r, fig.width=9, fig.height=10, echo = FALSE, warning = FALSE}
 olson_plot <- olson_summary %>%
     filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -791,44 +759,22 @@ olson_plot <- olson_summary %>%
 olson_plot + legend_long + plot_layout(widths = c(3, 1))
 ```
 
-```{r}
+```{r, include = FALSE}
 ggsave('figures/olson_biomes.png', olson_plot + legend_long + plot_layout(widths = c(3, 1))
 , height = 10, width = 9, dpi = 600)
 ```
 
 ## 15 Class Biomes
+And again for the 15-class biomes.
 ```{r}
-biome_key_15 <- tibble(biome_value = 1:15,
-                    biome15 = factor(c('Tropical Evergreen Woodland', 
-                                       'Tropical Deciduous Woodland', 
-                                       'Temperate Broadleaf and Evergreen Woodland', 
-                                       'Temperate Needleleaf and Evergreen Woodland', 
-                                       'Temperate Deciduous Woodland', 
-                                       'Boreal Evergreen Woodland', 
-                                       'Boreal Deciduous Woodland', 
-                                       'Mixed Forest', 
-                                       'Savanna', 
-                                       'Grassland and Steppe', 
-                                       'Dense Shrubland', 'Open Shrubland',	'Tundra',	'Desert and Barren', 'Polar Desert, Rock, and Ice'), levels = c('Tropical Evergreen Woodland', 
-                                       'Tropical Deciduous Woodland', 
-                                       'Temperate Broadleaf and Evergreen Woodland', 
-                                       'Temperate Needleleaf and Evergreen Woodland', 
-                                       'Temperate Deciduous Woodland', 
-                                       'Boreal Evergreen Woodland', 
-                                       'Boreal Deciduous Woodland', 
-                                       'Mixed Forest', 
-                                       'Savanna', 
-                                       'Grassland and Steppe', 
-                                       'Dense Shrubland', 'Open Shrubland',	'Tundra',	'Desert and Barren', 'Polar Desert, Rock, and Ice'))) %>%
-  left_join(biome_key)
-
 biome15_summary <- an12_dgg %>%
-  select(-upper, -lower) %>% rename(anthrome = baseline) %>%
+  select(-upper, -lower) %>% 
+  rename(anthrome = baseline) %>%
   left_join(biome_key_15) %>%
   anthrome_trajectory(by = biome15)
 ```
 
-```{r, fig.width=9, fig.height=10}
+```{r, fig.width=9, fig.height=10, echo = FALSE, warnings=FALSE}
 biome15_plot <- biome15_summary %>%
     filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
   mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
@@ -850,12 +796,14 @@ biome15_plot <- biome15_summary %>%
 biome15_plot + legend_long + plot_layout(widths = c(3, 1))
 ```
 
-```{r}
+```{r include = FALSE}
 ggsave('figures/biomes15.png', biome15_plot + legend_long + plot_layout(widths = c(3, 1))
 , height = 10, width = 9, dpi = 600)
 ```
 
-
+```{r}
+knitr::knit_exit()
+```
 
 ## Regional Legacies
 

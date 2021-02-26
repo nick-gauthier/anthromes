@@ -84,5 +84,65 @@ biome_key <- tibble(biome_value = 1:15) %>%
          # define levels so plots have correct order
          biome = factor(biome, levels = c('Tropical woodland', 'Temperate woodland', 'Boreal woodland', 'Mixed woodland', 'Grassland and savanna', 'Shrubland', 'Tundra',	'Desert and barren', 'Ice, snow')))
 
+#olson biomes
+olson_key <- tibble(olson_biome = 1:14,
+                    olson_name = factor(
+                      c('Tropical & Subtropical Moist Broadleaf Forests',
+                        'Tropical & Subtropical Dry Broadleaf Forests',
+                        'Tropical & Subtropical Coniferous Forests',
+                        'Temperate Broadleaf & Mixed Forests',
+                        'Temperate Conifer Forests',
+                        'Boreal Forests/Taiga',
+                        'Tropical & Subtropical Grasslands, Savannas & Shrublands',
+                        'Temperate Grasslands, Savannas & Shrublands',
+                        'Flooded Grasslands & Savannas',
+                        'Montane Grasslands & Shrublands',
+                        'Tundra',
+                        'Mediterranean Forests, Woodlands & Scrub',
+                        'Deserts & Xeric Shrublands',
+                        'Mangroves'),
+                      levels = c(
+                        'Tropical & Subtropical Moist Broadleaf Forests',
+                        'Tropical & Subtropical Dry Broadleaf Forests',
+                        'Tropical & Subtropical Coniferous Forests',
+                        'Temperate Broadleaf & Mixed Forests',
+                        'Temperate Conifer Forests',
+                        'Boreal Forests/Taiga',
+                        'Tropical & Subtropical Grasslands, Savannas & Shrublands',
+                        'Temperate Grasslands, Savannas & Shrublands',
+                        'Flooded Grasslands & Savannas',
+                        'Montane Grasslands & Shrublands',
+                        'Tundra',
+                        'Mediterranean Forests, Woodlands & Scrub',
+                        'Deserts & Xeric Shrublands',
+                        'Mangroves'
+                      )
+                    ))
+
+#15-class biomes
+biome_key_15 <- tibble(biome_value = 1:15,
+                       biome15 = factor(c('Tropical Evergreen Woodland',
+                                          'Tropical Deciduous Woodland',
+                                          'Temperate Broadleaf and Evergreen Woodland',
+                                          'Temperate Needleleaf and Evergreen Woodland',
+                                          'Temperate Deciduous Woodland',
+                                          'Boreal Evergreen Woodland',
+                                          'Boreal Deciduous Woodland',
+                                          'Mixed Forest',
+                                          'Savanna',
+                                          'Grassland and Steppe',
+                                          'Dense Shrubland', 'Open Shrubland',	'Tundra',	'Desert and Barren', 'Polar Desert, Rock, and Ice'), levels = c('Tropical Evergreen Woodland',
+                                                                                                                                                         'Tropical Deciduous Woodland',
+                                                                                                                                                         'Temperate Broadleaf and Evergreen Woodland',
+                                                                                                                                                         'Temperate Needleleaf and Evergreen Woodland',
+                                                                                                                                                         'Temperate Deciduous Woodland',
+                                                                                                                                                         'Boreal Evergreen Woodland',
+                                                                                                                                                         'Boreal Deciduous Woodland',
+                                                                                                                                                         'Mixed Forest',
+                                                                                                                                                         'Savanna',
+                                                                                                                                                         'Grassland and Steppe',
+                                                                                                                                                         'Dense Shrubland', 'Open Shrubland',	'Tundra',	'Desert and Barren', 'Polar Desert, Rock, and Ice'))) %>%
+  left_join(biome_key)
+
 # Regions
 region_key <- tibble(region = 1:8, region_name = c('Eurasia', 'Latin America and Caribbean', 'Near East', 'Africa', 'Asia', 'Europe', 'North America', 'Oceania'))
