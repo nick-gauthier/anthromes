@@ -11,6 +11,29 @@ continued from analysis . . .
 # Other Visualizations
 Other visualization and analyses not included in the main paper.
 
+## HFP comparison
+
+How well do the modern anthromes predict these variables compared to the max human footprint? The order is class -> level -> hfp_max for all of these except for ind50, which is hfp -> class -> level. Repeating for 100 threshold for the logistic regression, kba is the same but pa and ind have class -> hfp -> level. In all cases but ind50 the classes are better than the hfp. In all cases but ind50, ind, and pa are the levels better than hfp.
+
+```{r}
+pres_pred1 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
+                          predictands = c('v_thr', 'v_rich')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = poisson(), 
+                        dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  arrange(aic)
+
+pres_pred2 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
+                          predictands = c('kba50', 'ind50', 'pa50')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(), 
+                        dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  arrange(aic)
+
+pres_pred3 <- expand_grid(predictors = c('an_2017AD', 'hfp_max', 'level'),
+                          predictands = c('kba', 'ind', 'pa')) %>%
+  mutate(aic = map2_dbl(predictands, predictors, calc_aic, fam = binomial(),
+                        dat = left_join(regression_dat, anthrome_key, by = c('an_2017AD' = 'class')))) %>%
+  arrange(aic)
+```
 
 ## Lasso Regression
 
@@ -170,6 +193,172 @@ glmnet_mod6b <- cv.glmnet(regression_mat, regression_dat$pa50,
                          foldid = as.numeric(as.factor(regression_dat$region_name)), 
                          family = 'binomial', 
                          intercept = FALSE, standardize = FALSE, parallel = FALSE, alpha = 0)
+```
+
+
+## Cramer's V
+```{r}
+#cramers v test
+library(rcompanion)
+cramer <- summarise_all(an12_dgg[2:61], ~cramerV(an12_dgg$`2017AD`, .))[1,] %>% as.numeric
+
+qplot(x = time_key$year[-c(59:67, 69:74)], y = cramer, geom = 'point')
+
+
+test2 <- summarise_all(an12_dgg[2:61], ~cramerV(an12_dgg$`2017AD`, ., ci = TRUE))
+```
+
+## Unused lands
+
+```{r}
+hyde <- readRDS('hyde_dgg')
+dgg_ids <- readRDS('dgg_ids')
+
+hyde_crop <- hyde %>%
+  dplyr::select(contains('cropland')) %>%
+    mutate(id = dgg_ids) %>%
+  filter(id %in% an12_dgg_inputs$id) %>%
+  pivot_longer(-id) %>%
+  mutate(time_step = str_remove(name, 'sum.cropland')) %>%
+  select(-name) %>%
+  filter(time_step %in% c(time_steps_decades, time_steps_centuries, time_steps_millennia)) %>%
+  pivot_wider(names_from = time_step, values_from = value)
+gc()
+
+hyde_grazing <- hyde %>%
+  dplyr::select(contains('grazing')) %>%
+    mutate(id = dgg_ids) %>%
+  filter(id %in% an12_dgg_inputs$id) %>%
+  pivot_longer(-id)  %>%
+  mutate(time_step = str_remove(name, 'sum.grazing')) %>%
+  select(-name) %>%
+    filter(time_step %in% c(time_steps_decades, time_steps_centuries, time_steps_millennia)) %>%
+    pivot_wider(names_from = time_step, values_from = value)
+
+gc()
+hyde_urban <- hyde %>%
+  dplyr::select(contains('uopp')) %>%
+    mutate(id = dgg_ids) %>%
+  filter(id %in% an12_dgg_inputs$id) %>%
+  pivot_longer(-id)  %>%
+  mutate(time_step = str_remove(name, 'sum.uopp_')) %>%
+  select(-name) %>%
+    filter(time_step %in% c(time_steps_decades, time_steps_centuries, time_steps_millennia)) %>%
+    pivot_wider(names_from = time_step, values_from = value)
+
+gc()
+
+hyde_unused <- bind_rows(hyde_crop, hyde_urban, hyde_grazing) %>%
+  group_by(id) %>%
+  summarise_all(~1 - sum(.)) # wrong! should be land_area - sum(.)
+save(hyde_unused, file = 'hyde_unused')
+```
+
+```{r, fig.height = 2, fig.width = 10}
+load('hyde_unused')
+unused_summary <- hyde_unused %>%
+    mutate(land_area = an12_dgg_inputs$land_area) %>% 
+  pivot_longer(-c(id, land_area), names_to = 'time_step', values_to = 'unused') %>% 
+  mutate(unused = 1 - unused,
+         unused = land_area - unused) %>% # plot this 
+  left_join(pivot_longer(an12_dgg, -id, names_to = 'time_step', values_to = 'anthrome')) %>%
+  count(time_step, anthrome, wt = unused, name = 'unused_area') %>%
+  left_join(anthrome_key) %>%
+   left_join(time_key, by = 'time_step') %>%
+  mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+                            year %in% seq(100, 1700, 100) ~ 'Centuries',
+                            year %in% c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+         period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>% 
+    mutate(percent_land_area = unused_area /total_land_area) %>%
+  select(time_step, class, percent_land_area, period, year)
+
+ unused_summary %>%
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter(class != 'Ice') %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+  #  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  #facet_grid(~period, scales = 'free_x', space = 'free') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1)) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land area') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.1, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+ ggsave('unused_trajectory.png', height =2, width = 10)
+```
+
+## Always Uninhabited
+does this end up being the same as the the onsets?
+```{r}
+an12_dgg %>% 
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  filter(anthrome == 61) %>%
+  group_by(id) %>%
+  count %>%
+  filter(n == 60) %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
+  pull(land_area) %>%
+  sum %>%
+  `/`(total_land_area)%>%
+  `*`(100)
+
+an12_dgg %>% 
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  filter(anthrome == 62) %>%
+  group_by(id) %>%
+  count %>%
+  filter(n == 60) %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
+  pull(land_area) %>%
+  sum %>%
+  `/`(total_land_area)%>%
+  `*`(100)
+
+an12_dgg %>% 
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  filter(anthrome == 63) %>%
+  group_by(id) %>%
+  count %>%
+  filter(n == 60) %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
+  pull(land_area) %>%
+  sum %>%
+  `/`(total_land_area) %>%
+  `*`(100)
+######################
+
+an12_dgg_inputs %>%
+  st_drop_geometry() %>%
+  mutate(woodland = if_else(pot_veg <= 8, 'woodland', 'bare')) %>%
+  group_by(woodland) %>%
+  count(wt = land_area, name = 'area')
+
+an12_dgg %>% 
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  filter(anthrome == 61) %>%
+  group_by(id) %>%
+  count %>%
+  filter(n == 60) %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
+  pull(land_area) %>%
+  sum %>%
+  `/`(55432294)%>%
+  `*`(100)
+
+an12_dgg %>% 
+  pivot_longer(-id, names_to = 'time_step', values_to = 'anthrome') %>%
+  filter(anthrome == 62) %>%
+  group_by(id) %>%
+  count %>%
+  filter(n == 60) %>%
+  left_join(an12_dgg_inputs, by = 'id') %>%
+  pull(land_area) %>%
+  sum %>%
+  `/`(76287578)%>%
+  `*`(100)
 ```
 
 ## Regional Breakdown

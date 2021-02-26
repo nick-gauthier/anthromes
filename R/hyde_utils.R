@@ -1,4 +1,4 @@
-#' Title
+#' Helper functions for dealing with HYDE data
 #'
 #' @param hyde_varname
 #' @param hyde_path
@@ -24,7 +24,7 @@ hyde2dgg <- function(hyde_varname, dgg, hyde_path){
     mutate(ANL12_ID = dgg$ANL12_ID, .before = 1)
 }
 
-
+#' @export
 get_hyde_pop <- function(hyde, by = NULL) {
   hyde_pop %>%
     left_join(an12_dgg_inputs, by = c('ANL12_ID' = 'id')) %>%
