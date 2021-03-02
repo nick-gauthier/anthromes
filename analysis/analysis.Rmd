@@ -308,6 +308,11 @@ hyde_pop_biomes <- get_hyde_pop(hyde_pop, by = biome) %>%
     filter(biome != 'Ice, snow')
 ```
 
+```{r include = FALSE}
+# remove hyde population data to save RAM
+rm(hyde_pop)
+```
+
 
 ## Anthrome Legacies
 
@@ -691,7 +696,8 @@ change_type <- an12_dgg %>%
   group_by(id) %>%
   summarise(intensive = any(anthrome <= 43), cultured = any(anthrome <= 54)) %>%
   left_join(intensive_onset, by = 'id') %>%
-  mutate(class = case_when(intensive == TRUE & intensive_onset <= 1 ~'U0001', # fyi case when statement evaluates in order
+  # fyi this case when statement evaluates in order
+  mutate(class = case_when(intensive == TRUE & intensive_onset <= 1 ~'U0001', 
                             intensive == TRUE & intensive_onset <= 1500 ~ 'U1500',
                             intensive == TRUE & intensive_onset <= 1850 ~ 'U1850',
                             intensive == TRUE & intensive_onset <= 1950 ~ 'U1950',
@@ -699,7 +705,10 @@ change_type <- an12_dgg %>%
                             cultured == TRUE ~ 'SEMI',
                             TRUE  ~ 'NEVR')) %>%
   left_join(an12_dgg_inputs, ., by = 'id') %>%
-  mutate(class_biome = if_else(biome %in% biome_key$biome[1:8], paste0('W_', class), paste('N_', class))) %>% #distingguish woody from nonwoody biomes
+  # distingguish woody from nonwoody biomes
+  mutate(class_biome = if_else(biome %in% biome_key$biome[1:8], 
+                               paste0('W_', class), 
+                               paste('N_', class))) %>% 
   select(id, land_area, class, class_biome)
 ```
 
@@ -722,47 +731,6 @@ The visualizations for this map were done separately in ArcGIS. Save out the req
 write_csv(change_type, 'data/derived_data/change_type.csv')
 ```
 
-## Olson Biomes
-
-Rerun the biome-level analysis using the Olson Biomes. 
-```{r}
-olson_summary <- an12_dgg %>% 
-  select(-lower, -upper) %>% 
-  rename(anthrome = baseline) %>%
-  left_join(read_csv('data/olson_biomes.csv')) %>%
-  filter(!(olson_biome %in% c(0, NA))) %>% # the NAs are from the land mask, but what about the 0's
-  mutate(olson_biome = as.factor(olson_biome)) %>%
-  anthrome_trajectory(by = olson_biome) %>%
-  mutate(olson_biome = as.numeric(olson_biome)) %>%
-  left_join(olson_key)
-```
-
-```{r, fig.width=9, fig.height=10, echo = FALSE, warning = FALSE}
-olson_plot <- olson_summary %>%
-    filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
-  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
-  filter( class != 'NODATA') %>%
-  ggplot(aes(time_step, percent_land_area)) +
-  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
-  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
-  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
-  facet_wrap(~olson_name, ncol = 2, dir = 'v') +
-  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
-  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
-  theme_classic() +
-  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
-  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
-                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
-  labs(x = 'Year', y = 'Percent land surface') +
-  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
-
-olson_plot + legend_long + plot_layout(widths = c(3, 1))
-```
-
-```{r, include = FALSE}
-ggsave('figures/olson_biomes.png', olson_plot + legend_long + plot_layout(widths = c(3, 1))
-, height = 10, width = 9, dpi = 600)
-```
 
 ## 15 Class Biomes
 And again for the 15-class biomes.
@@ -799,6 +767,53 @@ biome15_plot + legend_long + plot_layout(widths = c(3, 1))
 ```{r include = FALSE}
 ggsave('figures/biomes15.png', biome15_plot + legend_long + plot_layout(widths = c(3, 1))
 , height = 10, width = 9, dpi = 600)
+```
+
+## Olson Biomes
+
+Rerun the biome-level analysis using the Olson Biomes. 
+```{r}
+olson_summary <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>%
+  left_join(read_csv('data/olson_biomes.csv'), by = 'id') %>%
+  filter(!(olson_biome %in% c(0, NA))) %>% # the NAs are from the land mask, but what about the 0's
+  mutate(olson_biome = as.factor(olson_biome)) %>%
+  anthrome_trajectory(by = olson_biome) %>%
+  mutate(olson_biome = as.numeric(olson_biome)) %>%
+  left_join(olson_key, by = 'olson_biome')
+```
+
+```{r, fig.width=9, fig.height=10, echo = FALSE, warning = FALSE}
+olson_plot <- olson_summary %>%
+    filter(!is.na(period))%>% # temporary fix, looks like the new count isn't dropping order levels and keeping years after 2000?
+  mutate(time_step = ordered(time_step, levels = time_steps_ordered)) %>%
+  filter( class != 'NODATA') %>%
+  ggplot(aes(time_step, percent_land_area)) +
+  geom_col(aes(fill = class, color = class), width = .8, size = .1)+
+  geom_vline(xintercept = c('0AD', '1700AD'), color = 'black', alpha = .5) +
+  geom_hline(yintercept = .5, linetype = 2, color = 'black', alpha = .25) +
+  facet_wrap(~olson_name, ncol = 2, dir = 'v') +
+  scale_fill_manual(values = anthrome_colors, name = 'Anthrome') +
+  scale_color_manual(values = anthrome_colors, name = 'Anthrome') +
+  theme_classic() +
+  scale_y_continuous(expand = c(0.01,0.01), labels = scales::percent_format(accuracy = 1), n.breaks = 3) +
+  scale_x_discrete(breaks = c('8000BC', '0AD', '800AD', '1700AD', '1800AD', '1900AD', '2000AD'), 
+                   labels = c('8000ʙᴄᴇ', '1ᴄᴇ', '800ᴄᴇ', '1700ᴄᴇ', '1800ᴄᴇ', '1900ᴄᴇ', '2000ᴄᴇ')) +
+  labs(x = 'Year', y = 'Percent land surface') +
+  theme(legend.position = 'none', strip.text.x = element_text(hjust = 0), panel.spacing.x=unit(.7, "lines"), strip.background = element_blank(), axis.line.y = element_blank(),  axis.text=element_text(size=rel(0.7)), panel.border = element_rect(colour = "grey20", fill=NA, size = 1))
+
+olson_plot + legend_long + plot_layout(widths = c(3, 1))
+```
+
+```{r, include = FALSE}
+ggsave('figures/olson_biomes.png', olson_plot + legend_long + plot_layout(widths = c(3, 1))
+, height = 10, width = 9, dpi = 600)
+```
+
+```{r, include = FALSE}
+# anthromes data no longer needed, remove to conserve RAM
+rm(an12_dgg)
 ```
 
 ```{r}
