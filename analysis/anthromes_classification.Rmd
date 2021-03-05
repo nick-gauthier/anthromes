@@ -1,5 +1,5 @@
 ---
-title: "Anthromes 12K Discrete Global Grid System"
+title: "Anthromes 12K Discrete Global Grid System -- Anthromes Classification"
 author: "Nicolas Gauthier"
 date: "Last knit on: `r Sys.Date()`"
 output:
@@ -12,131 +12,19 @@ output:
 
 # Setup
 
-Load **dggridR** and **sf** for calculating the Discrete Global Grid cell geometries, **raster** and **exactextractr** for extracting raster data at the DGG cell locations, and **tidyverse** for data summaries and visualization. Also load this package, **anthromes** for additional analysis and plotting functions.
+Load **tidyverse** for data cleaning and this package, **anthromes**, for additional analysis and plotting functions.
 ```{r setup, include=FALSE}
 knitr::opts_chunk$set(echo = TRUE)
-library(dggridR)
-library(raster)
-library(sf)
-sf_use_s2(TRUE) # for s2 spherical geometry
-library(exactextractr)
 library(tidyverse)
 devtools::load_all()
 ```
 
-# Discrete Global Grid System
-Generate an Icosahedral Snyder Equal Area Aperture 3 hexagonal grid. Use the Level 12 resolution for ~100km grid cells.
-```{r}
-dggs <- dgconstruct(res = 12)
-```
-
-Load a a set of DGG IDs we can use as a land mask. These are based on the intersection of the HYDE 3.2 land mask and previously generated Level 12 DGG grids from GLOBE. We use these pre-computed IDs as a land mask for simplicity and to avoid the computational effort of calculating DGG geometries over the ocean.
-```{r}
-dgg_ids <- read_csv('data/raw_data/dgg_ids.csv', col_types = 'ii') # read ids as integers
-```
-
-Create polygons using the DGG system and cell numbers from the HYDE land mask.
-```{r, cache = TRUE}
-dgg_land <- dgcellstogrid(dggs, dgg_ids$ANL12_ID, 
-                          frame = FALSE, 
-                          wrapcells = FALSE) %>%
-  st_as_sf(crs = 4326) %>%
-  bind_cols(dgg_ids) %>%
-  # split polygons at the international dateline for better plotting
-  st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30"))
-```
-
-## Process HYDE fixed inputs
-
-Load the HYDE 3.2 fixed input rasters including land area, potential vegetation, potential villages, and world region data. Use **exact_extract()** to aggregate the input rasters to the DGG geometries. This function weights the calculations by the coverage fraction of each raster grid cell by each DGG cell. For land area, calculate the total weighted land area in each DGG cell. For the other variables, calculate the modal value in each weighted DGG cell. Because the limiting computational step is the calculation of the cell coverage fractions, its easier to calculate the sum and mode for all layers simultaneously and just select the desired outputs.
-```{r}
-fixed_inputs <- c('data/raw_data/supporting_5m_grids/maxln_cr.tif',
-                  'data/raw_data/supporting_5m_grids/potveg15.tif',
-                  'data/raw_data/supporting_5m_grids/potvill20.tif',
-                  'data/raw_data/simple_regions.tif') %>%
-  stack() %>%
-  exact_extract(dgg_land, c('sum', 'mode'), progress = FALSE) %>%
-  dplyr::select(sum.maxln_cr, mode.potveg15, mode.potvill20, mode.simple_regions) %>%
-  bind_cols(dgg_ids, .)
-```
-
-## NMH
-
-Extract the Natural and Modified Habitats layer using a custom function for calculating the coverage fraction of each of the four NMH categories.
-```{r}
-nmh <- raster('data/raw_data/WCMC_natural_modified_habitat_screening_layer/
-              natural_modified_habitat_screening_layer.tif') %>%
-  exact_extract(dgg_land, function(value, frac) tapply(frac, value, sum) / sum(frac),
-                progress = FALSE) %>% 
-  map(~{if(length(.) == 0) c(`1` = NA, `2` = NA, `3` = NA, `4` = NA) else .}) %>% 
-  map_dfr(as.list) %>%
-  replace_na(list(`1` = 0, `2` = 0, `3` = 0, `4` = 0)) %>% # turn NAs into zeros
-  transmute(nmh_4 = `4`, nmh_34 = `3` + `4`)
-```
-
-## Three Global Conditions Data
-
-Load the Three Global Conditions data and associated data layers. These are already in DGG format, so just extract the data and cell IDs.
-```{r}
-tgc_tbl <- read_csv('data/raw_data/three_conditions_v4_rep_data.csv') %>% 
-  dplyr::select(l1_id, biome, `@3_cond_v4`, hfp_max, 
-                pa_km2, kba_km2, ind_cnt, v_rich, v_thr) %>%
-  rename(olson_biome = biome) %>% 
-  left_join(dgg_land, by = c('l1_id' = 'L1_ID')) 
-```
-
-```{r}
-bind_cols(tgc_tbl, nmh_tbl)
-```
-
-```{r}
-write_sf(dgg_land, 'data/derived_data/dgg_land.shp')
-write_csv(fixed_inputs, 'data/derived_data/fixed_inputs.csv')
-write_csv(nmh_tbl, 'data/derived_data/nmh_tibble.csv')
-write_csv(tgc_tbl, 'data/derived_data/tgc_tibble.csv')
-```
-
-```{r}
-dgg_land <- read_sf('data/derived_data/dgg_land.shp', crs = 4326)
-```
-
-# HYDE to DGG
-
-Loop through each variable name, import HYDE rasters from each year, brick, and extract by DGG polygon.
-
-```{r}
-hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
-hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
-
-hyde_dgg <- hyde_names %>%
-  setNames(hyde_names) %>% # name the vector so the row bind is cleaner
-  map_dfr(hyde2dgg, dgg_land, '~/Downloads/baseline/zip', .id = 'var')
-
-hyde_dgg_lower <- hyde_names %>%
-  setNames(hyde_names) %>% 
-  map_dfr(hyde2dgg, dgg_land, '~/Downloads/lower/zip', .id = 'var')
-
-hyde_dgg_upper <- hyde_names %>%
-  setNames(hyde_names) %>% 
-  map_dfr(hyde2dgg, dgg_land, '~/Downloads/upper/zip', .id = 'var')
-```
-
-```{r}
-saveRDS(hyde_dgg, 'data/derived_data/hyde_dgg')
-saveRDS(hyde_dgg_upper, 'data/derived_data/hyde_dgg_upper')
-saveRDS(hyde_dgg_lower, 'data/derived_data/hyde_dgg_lower')
-```
-
-
-```{r}
-rm(dgg_land) 
-```
-
-# Anthromes classification
+# Anthromes Classification
 
 ```{r}
 fixed_inputs <- read_csv('data/derived_data/fixed_inputs.csv', col_types = 'iidiii')
 ```
+
 ```{r}
 hyde <- readRDS('tmp/hyde_dgg') %>%
   rename_hyde()
@@ -176,7 +64,7 @@ hyde %>%
             irrigation = tot_irri / area,
             urban = uopp / area,
             used = urban + crops + grazing,
-            .keep = 'unused')) 
+            .keep = 'unused')
 }
 ```
 
@@ -213,7 +101,7 @@ read_csv('anthromes_dgg2.csv') %>%
   write_csv('anthromes_dgg.csv')
 ```
 
-## classify uncertainties
+## Uncertainties
 ```{r}
 hyde_dgg_upper <- readRDS('hyde_dgg_upper')
 
@@ -312,14 +200,9 @@ anthromes_dgg_shp <- anthromes_dgg %>%
 write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
 ```
 
-# Create final masks and grids
+# Check and Save the Results
 ```{r, eval = FALSE}
-dgg_land <- read_sf('l12_ISEA3H_dgg_land.shp')
 
-#this is erles mask
-land_mask <- read_sf('../an12_dgg_cells.shp') %>%
-  filter(DGG_status == 3) %>%
-  pull(ANL12_ID)
 
 fixed_inputs <- read_csv('fixed_inputs.csv') %>%
   mutate(id = dgg_land$id)
@@ -328,10 +211,11 @@ an12_fixed_inputs <- dgg_land %>%
   filter(id %in% land_mask) %>% 
   left_join(fixed_inputs) %>%
   select(id, land_area, pot_veg, pot_vill, geometry) %>%
-    st_set_crs(4326) # might not be necessary with s2?
+  st_set_crs(4326) # might not be necessary with s2?
 
 write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
 ```
+
 
 ```{r}
 an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')

@@ -71,18 +71,11 @@ total_land_area <- sum(an12_dgg_inputs$land_area)
 
 contemp_vars <- read_sf('data/contemp_vars.shp') %>%
   st_drop_geometry() %>%
-  mutate(
-    land_area = land_ar,
-    pa50 = pa_km2 >= (0.5 * land_ar),
-    ind50 = ind_cnt >= (0.5 * land_ar),
-    kba50 = kba_km2 >= (0.5 * land_ar),
-    v_rich = round(v_rich),
-    v_thr = round(v_thr),
-    hfp_max = round(hfp_max),
-    tgc = X_3_c_4,
-    nmh3 = nmh_34 - nmh_4
-  ) %>%
-  select(-c(X_3_c_4, max, land_ar, landsut, pop17, food_cl, mean, nmh, L1_ID))
+  mutate(land_area = land_ar,
+         pa50 = pa_km2 >= (0.5 * land_ar),
+         ind50 = ind_cnt >= (0.5 * land_ar),
+         kba50 = kba_km2 >= (0.5 * land_ar)) %>%
+  select(-c(max, land_ar, landsut, pop17, food_cl, mean, nmh, L1_ID))
 ```
 
 Create a convenience tibble in "wide" format for the regression analysis in Figure 4.
@@ -193,7 +186,7 @@ nmh3_summary <- contemp_vars %>%
 
 # Likely Natural Habitat
 nmh4_summary <- contemp_vars %>%
-  mutate(nmh4_km2 = nmh_4 * land_area) %>%
+  mutate(nmh4_km2 = nmh4 * land_area) %>%
   select(id, nmh4_km2) %>%
   rename(land_area = nmh4_km2) %>%
   left_join(select(an12_dgg, -land_area), by = 'id') %>% 
@@ -345,7 +338,7 @@ legacy_mods <-
                           dat = regression_dat),
     # "natural habitat"
     nmh_aic = pmap_dbl(list(predictands, predictors, fam), calc_aic, 
-                       dat = filter(regression_dat, nmh_34 > 0.5)),
+                       dat = filter(regression_dat, (nmh3 + nmh4) > 0.5)),
     # protected areas
     pa_aic = pmap_dbl(list(predictands, predictors, fam), calc_aic, 
                       dat = filter(regression_dat, pa50 == TRUE)),
