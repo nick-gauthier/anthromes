@@ -1,0 +1,156 @@
+---
+title: "Untitled"
+author: "Nick Gauthier"
+date: "3/13/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(sf)
+library(stars)
+library(tidyverse)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+
+```{r}
+bbox <- st_bbox(c(xmin = 32, xmax = 42, ymin = 30, ymax = 40), crs = 4326)
+
+dgg <- read_sf('analysis/data/derived_data/dgg_land.shp') %>%
+  st_crop(bbox) %>%
+  select(-L1_ID)
+
+hyde <- readRDS('analysis/data/derived_data/hyde_dgg') %>% 
+  as_tibble() %>%
+  filter(ANL12_ID %in% dgg$ANL12_ID) %>%
+  group_nest(var)
+```
+
+```{r}
+hyde_to_stars <- function(dat, var, dgg) {
+  left_join(dat, dgg, by = 'ANL12_ID') %>%
+  st_as_sf %>%
+  st_as_stars %>%
+  select(-ANL12_ID) %>%
+  merge() %>%
+  setNames(var) %>%
+  st_set_dimensions(names = c('geometry', 'time'))
+}
+
+st_as_stars((((hyde$data[[1]]))), sf_geometry = dgg$geometry)
+
+hyde$data[[1]] %>% pivot_longer(cols = -ANL12_ID, names_to = 'time') %>% pivot_wider(time, names_from = ANL12_ID) %>% st_as_stars(sf_geomettry = dgg)
+
+saveRDS(t3, 't3.rds') 
+
+```
+  
+```{r}
+t3 <- map2(hyde$data, hyde$var, hyde_to_stars, dgg = dgg) %>%
+   do.call(c, .)
+```
+
+```{r}
+ggplot() +
+  geom_stars(data = t3['popc',,c(42)] ) +
+  facet_wrap(~time) +
+  scale_fill_viridis_c(trans = 'log')
+```
+
+```{r}
+hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
+  
+hyde_dgg <-  %>%
+  setNames(hyde_names) %>% # name the vector so the row bind is cleaner
+  # change this and the following paths to point to the HYDE data on your machine
+  map_dfr(hyde2dgg, dgg_land, '/Volumes/Data/baseline/zip', .id = 'var')
+# rewrite for stas@
+hyde2dgg <- function(hyde_varname, dgg, hyde_path){
+  suppressWarnings(
+    hyde <- list.files(hyde_path, recursive = TRUE, full.names = TRUE) %>% # does this catch the zip files too? better to unzip here?
+      str_subset(hyde_varname) %>%
+      map(raster) %>%
+      brick() %>%
+      `crs<-`(value = '+proj=longlat +datum=WGS84 +no_defs +ellps=WGS84 +towgs84=0,0,0') %>%
+      exact_extract(dgg, 'sum', progress = TRUE)
+  )
+  time_steps <- names(hyde) %>%
+    str_sub(start = str_length(hyde_varname) + 5) %>%
+    str_remove('_')
+
+  setNames(hyde, time_steps) %>%
+    mutate(ANL12_ID = dgg$ANL12_ID, .before = 1)
+}
+
+```
+
+```{r}
+test <- list.files('/Volumes/Data/baseline/zip', recursive = TRUE, full.names = TRUE) %>%
+  str_subset('cropland') %>%
+  read_stars(proxy = TRUE, along = 'time') %>%
+   st_set_crs(4326) %>%
+  setNames('cropland') %>%
+  st_set_dimensions('time', values = test_fac)
+
+
+
+test %>%
+  st_crop(bbox) %>% 
+  plot
+
+tif = system.file("tif/L7_ETMs.tif", package = "stars")
+read_stars(c(tif, tif, tif, tif), along = list(foo = c("bar1", "bar2"), time = c(t1, t1+2)))
+t1 = as.Date("2018-07-31")
+
+test %>% st_get_dimension_values(which = 'time')
+
+devtools::load_all()
+names(test)
+x = read_stars(tif)
+names(x)
+```
+
+```{r}
+test_fac <-  factor(sort(time_steps), levels = time_steps)
+
+test %>%
+ # st_set_dimensions(which = 'time', values = test_fac, names = 'time') %>%
+  st_crop(bbox) %>% 
+  st_as_stars %>%
+    merge(name = 'time')
+```
+
+
+```{r}
+library(ncdfgeom)
+write_stars(t3, 'hyde.shp')
+tif = system.file("tif/L7_ETMs.tif", package = "stars")
+x <- tif %>% read_stars
+plot(x)
+
+write_stars(x, 'test.nc')
+read_stars('test.nc') %>% plot
+x %>% st_xy2sfc(as_points = FALSE) %>% st_as_sf %>% write_sf('test.nc')
+
+write_stars(adrop(t3['cropland']), 'cropland.nc')
+
+```
+
+
+```{r}
+t3 %>% mutate(test =)
+t2 <- dgg %>% 
+  mutate(area = st_area(geometry)) %>%
+  st_as_stars %>%
+  select(area)
+
+st_apply(t3[,,1:2], 1:2, function(x) x * t2)
+
+```
+
