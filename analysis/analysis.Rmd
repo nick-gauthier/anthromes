@@ -111,18 +111,86 @@ Create summaries of global land areas for each anthrome along with breakdowns by
 global_summary <- an12_dgg %>% 
   select(-lower, -upper) %>% 
   rename(anthrome = baseline) %>% 
-  anthrome_trajectory()
+  anthrome_trajectory() %>%
+  # .drop = false perserves annual values!
+  filter(!is.na(period))
 
 regional_summary <- an12_dgg %>% 
   select(-lower, -upper) %>% 
   rename(anthrome = baseline) %>% 
-  anthrome_trajectory(by = region_name)
+  anthrome_trajectory(by = region_name) %>%
+  filter(!is.na(period))
 
 biome_summary <- an12_dgg %>% 
   select(-lower, -upper) %>% 
   rename(anthrome = baseline) %>% 
-  anthrome_trajectory(by = biome)
+  anthrome_trajectory(by = biome) %>%
+  filter(!is.na(period))
+
+global_summary_upper <- an12_dgg %>% 
+  select(-baseline, -lower) %>% 
+  rename(anthrome = upper) %>% 
+  anthrome_trajectory() %>%
+  filter(!is.na(period))
+
+regional_summary_upper <- an12_dgg %>% 
+  select(-lower, -baseline) %>% 
+  rename(anthrome = upper) %>% 
+  anthrome_trajectory(by = region_name)%>%
+  filter(!is.na(period))
+
+biome_summary_upper <- an12_dgg %>% 
+  select(-lower, -baseline) %>% 
+  rename(anthrome = upper) %>% 
+  anthrome_trajectory(by = biome)%>%
+  filter(!is.na(period))
+
+global_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>% 
+  anthrome_trajectory()%>%
+  filter(!is.na(period))
+
+regional_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>% 
+  anthrome_trajectory(by = region_name)%>%
+  filter(!is.na(period))
+
+biome_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>% 
+  anthrome_trajectory(by = biome)%>%
+  filter(!is.na(period))
+
+country_summary_lower <- an12_dgg %>% 
+  select(-baseline, -upper) %>% 
+  rename(anthrome = lower) %>% 
+  anthrome_trajectory(by = country_name)%>%
+  filter(!is.na(period))
+
+country_summary_upper <- an12_dgg %>% 
+  select(-baseline, -lower) %>% 
+  rename(anthrome = upper) %>% 
+  anthrome_trajectory(by = country_name)%>%
+  filter(!is.na(period))
+
+country_summary <- an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>% 
+  anthrome_trajectory(by = country_name) %>%
+  filter(!is.na(period))
 ```
+
+```{r}
+an12_dgg %>% 
+  select(-lower, -upper) %>% 
+  rename(anthrome = baseline) %>%
+    left_join(anthrome_key, by = 'anthrome') %>% # join before counting so empty factor levels are preserved
+    # this .drop argument turns the ordered time step factor into an unordered factor . . . factor handling could be more consistent
+    count(time_step, class,  wt = land_area, name = 'land_area', .drop = FALSE) %>% .[1500:1575,]
+```
+
 
 Do the same thing for conservation and biodiversity variables. Note the distinction between the filtered variables and the summed ones for which the preprocessing is more complex.
 ```{r, cache = TRUE}
@@ -260,6 +328,22 @@ global_summary %>%
   select(class, level, type, any_of(time_steps_ordered)) %>%
   write_csv('data/derived_data/an12_dgg_summary_global.csv')
 
+global_summary_lower %>% 
+  select(-period, -year) %>% 
+  pivot_wider(id_cols = class, names_from = time_step, values_from = percent_land_area) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(class, level, type, any_of(time_steps_ordered)) %>%
+  write_csv('data/derived_data/an12_dgg_summary_global_lower.csv')
+
+global_summary_upper %>% 
+  select(-period, -year) %>% 
+  pivot_wider(id_cols = class, names_from = time_step, values_from = percent_land_area) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(class, level, type, any_of(time_steps_ordered)) %>%
+  write_csv('data/derived_data/an12_dgg_summary_global_upper.csv')
+
 #this now saves NA region field with nothing in it
 regional_summary %>%
   select(-period, -year) %>%
@@ -270,6 +354,24 @@ regional_summary %>%
   mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
   write_csv('data/derived_data/an12_dgg_summary_region.csv')
 
+regional_summary_lower %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(class, region_name), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(region_name, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(region_name, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_region_lower.csv')
+
+regional_summary_upper %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(class, region_name), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(region_name, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(region_name, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_region_upper.csv')
+
 biome_summary %>%
   select(-period, -year) %>%
   pivot_wider(id_cols = c(biome, class), names_from = time_step, values_from = percent_land_area) %>%
@@ -278,6 +380,51 @@ biome_summary %>%
   select(biome, class, level, type, any_of(time_steps_ordered)) %>%
   mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
   write_csv('data/derived_data/an12_dgg_summary_biomes.csv')
+
+biome_summary_lower %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(biome, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(biome, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(biome, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_biomes_lower.csv')
+
+biome_summary_upper %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(biome, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(biome, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(biome, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_biomes_upper.csv')
+
+country_summary %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(country_name, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(country_name, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(country_name, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_country.csv')
+
+country_summary_lower %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(country_name, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(country_name, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(country_name, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_country_lower.csv')
+
+country_summary_upper %>%
+  select(-period, -year) %>%
+  pivot_wider(id_cols = c(country_name, class), names_from = time_step, values_from = percent_land_area) %>%
+  arrange(country_name, class) %>%
+  left_join(anthrome_key, by = 'class') %>%
+  select(country_name, class, level, type, any_of(time_steps_ordered)) %>%
+  mutate(across(where(is.numeric), ~replace_na(.x, 0))) %>%
+  write_csv('data/derived_data/an12_dgg_summary_country_upper.csv')
 
 contemp_summary %>%
   select(-period, -year) %>%

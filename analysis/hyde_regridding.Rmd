@@ -46,54 +46,57 @@ dgg_land <- dgcellstogrid(dggs, dgg_ids$ANL12_ID,
   st_wrap_dateline(options = c("WRAPDATELINE=YES", "DATELINEOFFSET=30"))
 ```
 
-# HYDE fixed inputs
+# HYDE 3.2
+## Fixed Inputs
 
 Load the HYDE 3.2 fixed input rasters including land area, potential vegetation, potential villages, and world region data. Use **exact_extract()** to aggregate the input rasters to the DGG geometries. This function weights the calculations by the coverage fraction of each raster grid cell by each DGG cell. For land area, calculate the total weighted land area in each DGG cell. For the other variables, calculate the modal value in each weighted DGG cell. Because the limiting computational step is the calculation of the cell coverage fractions, its easier to calculate the sum and mode for all layers simultaneously and just select the desired outputs.
 ```{r}
 fixed_inputs <- c('data/raw_data/supporting_5m_grids/maxln_cr.tif',
                   'data/raw_data/supporting_5m_grids/potveg15.tif',
                   'data/raw_data/supporting_5m_grids/potvill20.tif',
-                  'data/raw_data/supporting_5m_grids/simple_regions.tif') %>%
+                  'data/raw_data/supporting_5m_grids/simple_regions.tif',
+                  'data/raw_data/supporting_5m_grids/iso_cr.tif'
+                  ) %>%
   stack() %>%
   exact_extract(dgg_land, c('sum', 'mode'), progress = FALSE) %>%
-  dplyr::select(maxln_cr = sum.maxln_cr, potveg15 =  mode.potveg15, potvill20 = mode.potvill20, region = mode.simple_regions) %>%
+  dplyr::select(land_area = sum.maxln_cr, 
+                pot_veg =  mode.potveg15, 
+                pot_vill = mode.potvill20, 
+                region = mode.simple_regions, 
+                country = mode.iso_cr) %>%
   bind_cols(dgg_ids, .)
 ```
 
 
-# HYDE Land Use and Population
+## Land Use and Population
 
-Loop through each variable name, import HYDE rasters from each year, combine them in a brick, and extract by DGG polygon. See the documentation for the *hyde2dgg()* function for more details. Repeat for Upper and Lower uncertainty estimates as well.
-
+Loop through each variable name, import HYDE rasters from each year, combine them in a brick, and extract by DGG polygon. See the documentation for the *hyde2dgg()* function for more details. This will take a long time.
 ```{r}
 # list desired HYDE variable names
 hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
-#hyde_names_grepl <- str_c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp', sep = '|')
   
 hyde_dgg <- hyde_names %>%
   setNames(hyde_names) %>% # name the vector so the row bind is cleaner
   # change this and the following paths to point to the HYDE data on your machine
   map_dfr(hyde2dgg, dgg_land, '/Volumes/Data/baseline/zip', .id = 'var')
+```
 
+Repeat for Upper and Lower uncertainty estimates. 
+```{r}
 hyde_dgg_lower <- hyde_names %>%
   setNames(hyde_names) %>% 
   # change this path to point to the HYDE data on your machine
   map_dfr(hyde2dgg, dgg_land, '/Volumes/Data/lower/zip', .id = 'var')
+```
 
+```{r}
 hyde_dgg_upper <- hyde_names %>%
   setNames(hyde_names) %>% 
   # change this path to point to the HYDE data on your machine
   map_dfr(hyde2dgg, dgg_land, '/Volumes/Data/upper/zip', .id = 'var')
 ```
 
-```{r}
-saveRDS(hyde_dgg, 'data/derived_data/hyde_dgg')
-saveRDS(hyde_dgg_upper, 'data/derived_data/hyde_dgg_upper')
-saveRDS(hyde_dgg_lower, 'data/derived_data/hyde_dgg_lower')
-```
-
-
-# NMH
+# Natural and Modified Habitat
 
 Extract the Natural and Modified Habitats layer using a custom function for calculating the coverage fraction of each of the NMH "potential natural" and "likely natural" categories.
 ```{r}
@@ -127,6 +130,11 @@ contemp_vars <- left_join(nmh, tgc, by = 'L1_ID')
 
 # Check and Save the Results
 
+```{r}
+saveRDS(hyde_dgg, 'data/derived_data/hyde_dgg')
+saveRDS(hyde_dgg_upper, 'data/derived_data/hyde_dgg_upper')
+saveRDS(hyde_dgg_lower, 'data/derived_data/hyde_dgg_lower')
+```
 
 ```{r}
 sf_use_s2(FALSE)
