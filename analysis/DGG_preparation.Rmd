@@ -1,5 +1,5 @@
 ---
-title: "Anthromes 12K Discrete Global Grid System: HYDE Regridding"
+title: "Anthromes 12K Discrete Global Grid System: DGG Creation and Data Extraction"
 author: "Nicolas Gauthier"
 date: "Last knit on: `r Sys.Date()`"
 output:
@@ -17,7 +17,6 @@ Load **dggridR** and **sf** for calculating the Discrete Global Grid cell geomet
 knitr::opts_chunk$set(echo = TRUE)
 library(dggridR)
 library(sf)
-#sf_use_s2(TRUE) # for s2 spherical geometry
 library(raster)
 library(exactextractr)
 library(tidyverse)
@@ -131,76 +130,24 @@ contemp_vars <- left_join(nmh, tgc, by = 'L1_ID')
 # Check and Save the Results
 
 ```{r}
+# plot the outputs to check
+sf_use_s2(FALSE)
+dgg_land %>%
+  left_join(fixed_inputs) %>%
+st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
+  ggplot() +
+  geom_sf(aes(fill = potveg15), color = NA) +
+  scale_fill_viridis_c() +
+  coord_sf(crs = st_crs("+proj=eck4"))
+sf_use_s2(TRUE)
+```
+
+```{r}
 saveRDS(hyde_dgg, 'data/derived_data/hyde_dgg')
 saveRDS(hyde_dgg_upper, 'data/derived_data/hyde_dgg_upper')
 saveRDS(hyde_dgg_lower, 'data/derived_data/hyde_dgg_lower')
 ```
 
-```{r}
-sf_use_s2(FALSE)
-dgg_land %>%
-  left_join(fixed_inputs) %>%
-st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = potveg15), color = NA) +
-  scale_fill_viridis_c() +
-  coord_sf(crs = st_crs("+proj=eck4"))
-sf_use_s2(TRUE)
-```
-
-```{r}
-write_sf(dgg_land, 'data/derived_data/dgg_land.shp')
-write_csv(fixed_inputs, 'data/derived_data/fixed_inputs.csv')
-write_csv(contemp_vars, 'data/derived_data/contemp_vars.csv')
-```
-
-```{r, eval = FALSE}
-
-
-fixed_inputs <- read_csv('fixed_inputs.csv') %>%
-  mutate(id = dgg_land$id)
-
-an12_fixed_inputs <- dgg_land %>% 
-  filter(id %in% land_mask) %>% 
-  left_join(fixed_inputs) %>%
-  select(id, land_area, pot_veg, pot_vill, geometry) %>%
-  st_set_crs(4326) # might not be necessary with s2?
-
-write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
-```
-
-
-```{r}
-an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')
-an12_dgg <- read_csv('anthromes_dgg.csv', col_types = cols(.default = 'i')) %>%
-  filter(id %in% an12_dgg_inputs$id)
-
-write_csv(an12_dgg, 'an12_dgg.csv')
-
-read_csv('anthromes_dgg_lower.csv', col_types = cols(.default = 'i')) %>%
-  filter(id %in% an12_dgg_inputs$id) %>%
-  write_csv('an12_dgg_lower.csv')
-
-read_csv('anthromes_dgg_upper.csv', col_types = cols(.default = 'i')) %>%
-  filter(id %in% an12_dgg_inputs$id) %>%
-  write_csv('an12_dgg_upper.csv')
-
-an12_dgg_inputs %>% dplyr::select(id) %>%
-  left_join(an12_dgg) %>%
-  write_sf('an12_dgg.shp')
-```
-
-```{r}
-sf_use_s2(FALSE)
-dgg_land %>%
-  left_join(fixed_inputs) %>%
-st_crop(st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40))) %>% # comment out for whole world
-  ggplot() +
-  geom_sf(aes(fill = potveg15), color = NA) +
-  scale_fill_viridis_c() +
-  coord_sf(crs = st_crs("+proj=eck4"))
-sf_use_s2(TRUE)
-```
 
 ```{r}
 write_sf(dgg_land, 'data/derived_data/dgg_land.shp')

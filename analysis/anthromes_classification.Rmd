@@ -71,8 +71,6 @@ hyde %>%
 ```{r}
 hyde_dgg <- readRDS('hyde_dgg')
 
-
-
 anthromes_dgg <- hyde_dgg %>%
     setNames(new_names) %>%
   mutate(id = dgg_ids) %>%
@@ -173,7 +171,7 @@ anthromes_dgg_lower <- hyde_dgg_lower %>%
             used = urban + crops + grazing,
             .keep = 'unused') %>%
   anthromes_classify()) #%>%
-## necassary to save ram, but not if run on cluster
+## necessary to save ram, but not if run on cluster
 write_csv(anthromes_dgg_lower, 'anthromes_dgg_lower2.csv')
 gc()
 read_csv('anthromes_dgg_lower2.csv') %>%
@@ -199,41 +197,3 @@ anthromes_dgg_shp <- anthromes_dgg %>%
   
 write_sf(anthromes_dgg_shp, 'anthromes_dgg.shp')
 ```
-
-# Check and Save the Results
-```{r, eval = FALSE}
-
-
-fixed_inputs <- read_csv('fixed_inputs.csv') %>%
-  mutate(id = dgg_land$id)
-
-an12_fixed_inputs <- dgg_land %>% 
-  filter(id %in% land_mask) %>% 
-  left_join(fixed_inputs) %>%
-  select(id, land_area, pot_veg, pot_vill, geometry) %>%
-  st_set_crs(4326) # might not be necessary with s2?
-
-write_sf(an12_fixed_inputs, 'an12_dgg_inputs.shp')
-```
-
-
-```{r}
-an12_dgg_inputs <- read_sf('an12_dgg_inputs.shp')
-an12_dgg <- read_csv('anthromes_dgg.csv', col_types = cols(.default = 'i')) %>%
-  filter(id %in% an12_dgg_inputs$id)
-
-write_csv(an12_dgg, 'an12_dgg.csv')
-
-read_csv('anthromes_dgg_lower.csv', col_types = cols(.default = 'i')) %>%
-  filter(id %in% an12_dgg_inputs$id) %>%
-  write_csv('an12_dgg_lower.csv')
-
-read_csv('anthromes_dgg_upper.csv', col_types = cols(.default = 'i')) %>%
-  filter(id %in% an12_dgg_inputs$id) %>%
-  write_csv('an12_dgg_upper.csv')
-
-an12_dgg_inputs %>% dplyr::select(id) %>%
-  left_join(an12_dgg) %>%
-  write_sf('an12_dgg.shp')
-```
-
