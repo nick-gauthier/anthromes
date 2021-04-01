@@ -13,12 +13,13 @@ Encoding: UTF-8
 LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
-Imports: bookdown,
-    here,
+Imports: 
+    bookdown,
     dggridR,
     dplyr (>= 1.0.4),
     exactextractr (>= 0.5.1),
     ggplot2 (>= 3.3.3),
+    magick (>= 2.6.0),
     patchwork (>= 1.1.1),
     purrr (>= 0.3.4),
     raster (>= 3.4-5),
@@ -26,6 +27,7 @@ Imports: bookdown,
     sf (>= 0.9-7),
     stringr (>= 1.4.0),
     tidyverse (>= 1.3.0),
+    magrittr
 Suggests: devtools,
     git2r,
     knitr,
