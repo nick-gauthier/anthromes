@@ -1,11 +1,21 @@
-#' Title
+#' Anthromes classification
 #'
-#' @param dat
+#' Applies the Anthromes-12k classification algorithm from Ellis et al. 2020 to a tibble of population
+#' and land-use data.
 #'
-#' @return
+#' @param dat the tibble to apply the anthromes classification to. Must include
+#' columns for total population count and areal fractions of urban, rice,
+#' irrigation, crops, grazing lands as well as supporting data on potential
+#' vegetation and potential village status.
+#'
+#' @return a tibble containing a new column for the resulting anthrome class
 #' @export
 #'
+#' @references Ellis, E.C., Beusen, A.H. and Goldewijk, K.K., 2020.
+#' Anthropogenic biomes: 10,000 BCE to 2015 CE. Land, 9(5), p.129.
+#'
 #' @examples
+#' anthromes_classify(dat)
 anthromes_classify <- function(dat){
   mutate(dat, anthrome = case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,

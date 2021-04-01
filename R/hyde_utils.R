@@ -1,12 +1,16 @@
 #' Helper functions for dealing with HYDE data
 #'
-#' @param hyde_varname
-#' @param hyde_path
+#' A set of helper functions for dealing with HYDE data
+#' @param hyde_varname The HYDE 3.2 variable name to process.
+#' One of 'cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp'
+#' @param dgg The discrete global grid file to use for extraction
+#' @param hyde_path Path to HYDE 3.2 data
 #'
 #' @return
 #' @export
 #'
 #' @examples
+#' hyde2dgg('cropland', dgg_land, 'path-to-hyde')
 hyde2dgg <- function(hyde_varname, dgg, hyde_path){
   suppressWarnings(
     hyde <- list.files(hyde_path, recursive = TRUE, full.names = TRUE) %>% # does this catch the zip files too? better to unzip here?

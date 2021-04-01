@@ -1,12 +1,20 @@
 #' Calculate Anthrome trajectories
 #'
-#' @param data
-#' @param by
+#' A convenience function to create summaries of the total land area in each
+#' anthrome type at each time step, potentially subset by an additional
+#' variable.
+#'
+#' @param data a tibble containing the anthrome classification over time
+#' @param by a column in data by which to group the anthrome data before summary
 #'
 #' @return
 #' @export
 #'
 #' @examples
+#' # global summary
+#' anthrome_trajectory(dat)
+#' # summary by biome
+#' anthrome_trajectory(dat, by = 'biome')
 anthrome_trajectory <- function(data, by = NULL) {
   data %>%
     left_join(anthrome_key, by = 'anthrome') %>% # join before counting so empty factor levels are preserved
@@ -24,6 +32,7 @@ anthrome_trajectory <- function(data, by = NULL) {
     select(class, {{ by }}, time_step, percent_land_area, period, year)
 }
 
+#' @export
 read_anthromes <- function(path) {
   read_csv(path, col_types = cols(.default = 'i')) %>%
     select(-c(`2001AD`:`2009AD`, `2011AD`:`2016AD`)) %>% # remove annual data
