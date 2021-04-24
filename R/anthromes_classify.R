@@ -16,8 +16,11 @@
 #'
 #' @examples
 #' anthromes_classify(dat)
-anthromes_classify <- function(dat){
-  mutate(dat, anthrome = case_when(
+anthromes_classify <- function(dat, inputs){
+  dat %>%
+    `/`(inputs['land_area']) %>% # area_weight
+    c(inputs) %>%
+  transmute(anthrome = case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,
     pop >= 100 & pot_vill == FALSE ~ 12L,
     pop >= 100 & rice >= 0.2 ~ 21L,
@@ -40,16 +43,15 @@ anthromes_classify <- function(dat){
     pop > 0 & trees == FALSE & used < 0.2 ~ 54L,
     pop > 0 & trees == FALSE & used >= 0.2 & crops >= grazing ~ 34L,
     pop > 0 & trees == FALSE & used >= 0.2 & crops < grazing ~ 43L,
-    used >= 0.2 & crops >= 0.2 ~ 34L,  # in python code but not paper
-    used >= 0.2 & grazing >= 0.2 ~ 43L,  # in python code but not paper
+    used >= 0.2 & crops >= 0.2 ~ 34L, # in python code but not paper
+    used >= 0.2 & grazing >= 0.2 ~ 43L, # in python code but not paper
     used >= 0.2 & crops >= grazing ~ 34L,
     used >= 0.2 & crops < grazing ~ 43L,
     pot_veg != 15 & trees == TRUE ~ 61L,
     pot_veg != 15 & trees == FALSE ~ 62L,
     pot_veg == 15 & used > 0 ~ 62L, # in python code but not paper
     pot_veg == 15 ~ 63L,
-    TRUE ~ 70L),
-    .keep = 'unused'
+    TRUE ~ 70L)
   )
 }
 
