@@ -1,0 +1,192 @@
+---
+title: "A gentle introduction to the anthromes R package"
+output: rmarkdown::html_vignette
+vignette: >
+  %\VignetteIndexEntry{A gentle introduction to the anthromes R package}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
+---
+
+```{r, include = FALSE}
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+This vignette presents an example workflow for using the `anthromes` R package for analyzing long-term human populations and land use.
+
+First load the `anthromes` package.
+```{r setup}
+library(anthromes)
+library(stars)
+library(tidyverse)
+library(gganimate)
+```
+
+Although the package is able to work with global data, we'll focus just on a subset of the eastern Mediterranean for simplicity.
+
+```{r}
+bbox <- st_bbox(c(xmin = 30, xmax = 40, ymin = 30, ymax = 40), crs = 4326)
+```
+
+# Download HYDE 3.2 data
+
+```{r}
+library(dataverse)
+```
+
+```{r, dataverse-database, echo = FALSE}
+test <- get_file('raw-data.zip',
+                      dataset = 'doi:10.7910/DVN/E3H3AK',
+                      server = 'dataverse.harvard.edu')
+```
+Read in the anthromes data as a stars object. stars in an R package for working with space-time cubes like the HYDE 3.2 data, which are spatial rasters representing multiple time steps.
+
+```{r}
+# the hyde variable names of interest
+hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
+
+# hyde <- file.path('/vsizip/', 
+#                   'Users/nick/Desktop/HYDE.zip', 
+#                   paste0(hyde_names, '.tif')) %>%
+#   read_stars(proxy = TRUE) %>% # could use RasterIO = list(bands = xxx) to select bands
+#   st_crop(bbox) %>%
+#   setNames(., str_remove(names(.), '.tif')) %>%
+#   st_set_dimensions('band', names = 'time')
+
+hyde <- file.path('/Users/nick/Desktop/HYDE', 
+                  paste0(hyde_names, '.tif')) %>%
+  read_stars(proxy = TRUE) %>% # could use RasterIO = list(bands = xxx) to select bands
+  st_crop(bbox) %>%
+  #setNames(., str_remove(names(.), '.tif')) %>% # reduntnat with next step
+  setNames(c('crops', 'grazing', 'rice', 'pop', 'irrigation', 'urban')) %>%
+  mutate(used = crops + grazing + urban) %>%
+  st_set_dimensions('band', names = 'time') %>%
+  st_as_stars()
+```
+
+A stars object prints two pieces of information, the attribute data (which is essentially a tibble that can be manipulated via typical tidyverse functions) and dimenson information (which records the spatial and temporal dimensions of the object).
+
+```{r}
+hyde
+```
+
+Also load in the HYDE 3.2 supporting grids: land area, potential vegetation, and potential villages.
+```{r}
+inputs <- list.files('../analysis/data/raw_data/supporting_5m_grids', full.names = TRUE)[c(2,4,5)] %>%
+  read_stars() %>%
+  setNames(c('land_area', 'pot_veg', 'pot_vill')) %>%
+  mutate(trees = pot_veg <= 8) %>%
+  st_crop(bbox)
+```
+
+You can easily plot these objects in ggplot using geom_stars().
+
+```{r}
+ggplot() +
+  geom_stars(data = hyde[,,,8:13]) +
+  facet_wrap(~time) +
+  coord_quickmap() +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  theme_bw() +
+  labs(title = 'HYDE 3.2 cropland', x = 'Latitude', y = 'Longitude')
+```
+
+You can easily animate these data as well using gganimate. 
+```{r}
+ggplot() +
+  geom_stars(data = filter(hyde, time %in% time_steps_millennia)) +
+  coord_quickmap() +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  theme_bw() +
+  transition_states(time) +
+  labs(title = 'HYDE 3.2 land use', subtitle = 'Cropland at {closest_state}', x = 'Latitude', y = 'Longitude')
+```
+
+By default, geom_stars will only plot the first attribute. If you'd like to plot multiple attributes at a time, the easiest way is to convert the attributes to an extra dimension.
+```{r}
+ggplot() +
+  geom_stars(data = merge(hyde[1:2,,,8:13])) +
+  facet_grid(attributes~time) +
+  coord_quickmap() +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  theme_bw() +
+  labs(title = 'HYDE 3.2 land use', x = 'Latitude', y = 'Longitude')
+```
+
+
+# Apply anthromes classification
+
+```{r}
+
+c(inputs, hyde)
+hyde %>% st_as_stars %>% anthromes_classify()
+
+(hyde / inputs['land_area']) %>%
+ 
+
+inputs 
+
+test <- slice(hyde, 'time', 1) %>%
+  anthromes_classify(inputs)
+plot(test)
+
+hyde[,,,1] %>%
+  st_apply(1:2, function(x) anthromes_classify(x, inputs))
+
+hyde[,,,1:2] %>%
+  st_apply('time', function(x) mutate(test = 1))
+ggplot() +
+  geom_stars(data = test) +
+  scale_fill_distiller()
+  scale_fill_manual(anthrome_colors())
+  
+hyde[,,,1:5] / inputs['land_area']
+
+hyde[,,,1:5] %>%
+  merge %>%
+  `/`(inputs['land_area']) %>%
+  split('attributes')
+
+test <- merge(hyde[,,,1:5]) / inputs['land_area']
+
+ggplot() +
+  geom_stars(data = test) +
+  facet_grid(attributes~time) +
+  scale_fill_viridis_c()
+```
+
+```{r}
+anthrome_lookup <- anthrome_key %>% pull(class) %>% setNames(anthrome_key$anthrome)
+
+anthromes <- hyde %>% 
+  st_get_dimension_values('time') %>% # get the time values
+  seq_along() %>% # iterate along the time steps
+  map(~anthromes_classify(slice(hyde, 'time', .), inputs)) %>%
+  do.call(c, .) %>%
+  merge(name = 'time') %>%
+  st_set_dimensions('time', st_get_dimension_values(hyde, 'time')) %>%
+  setNames('anthrome') %>% 
+  mutate(anthrome = recode(anthrome, !!!anthrome_lookup))
+```
+
+```{r}
+ggplot() +
+  geom_stars(data = anthromes[,,,8:13]) +
+  facet_wrap(~time) +
+  coord_quickmap() +
+  scale_fill_manual(values = anthrome_colors(), drop = TRUE) +
+  theme_bw() +
+  labs(title = 'Anthromes-12k', x = 'Latitude', y = 'Longitude')
+```
+
+```{r}
+ggplot() +
+  geom_stars(data = anthromes[,,,1:3]) +#filter(anthromes, time %in% time_steps_millennia)) +
+  transition_states(time) +
+  coord_quickmap() +
+  scale_fill_manual(values = anthrome_colors(), drop = FALSE) +
+  theme_bw() +
+  labs(title = 'Anthromes-12k', subtitle = 'Anthromes at {closest_state}', x = 'Latitude', y = 'Longitude')
+```
