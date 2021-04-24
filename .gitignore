@@ -30,3 +30,5 @@
 vignettes/tmp/
 .DS_Store
 */data/*
+inst/doc
+analysis/
