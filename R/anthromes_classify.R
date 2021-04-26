@@ -16,9 +16,26 @@
 #'
 #' @examples
 #' anthromes_classify(dat)
+#'
+get_anthromes <- function(hyde, inputs) {
+  time_dims <- st_get_dimension_values(hyde, 'time') # get the time values
+
+  seq_along(time_dims) %>% # iterate along the time steps
+    # the problem here is that the slice and map approach repeats the geometry vector a bunch of times ... slow!
+  map(~anthromes_classify(slice(hyde, 'time', .), inputs)) %>%
+  do.call(c, .) %>%
+  merge(name = 'time') %>%
+  st_set_dimensions('time', time_dims) %>%
+  setNames('anthrome') %>%
+  mutate(anthrome = recode(anthrome, !!!anthrome_lookup))
+}
+
+#' @export
 anthromes_classify <- function(dat, inputs){
+  # should check that all columns are present
   dat %>%
     `/`(inputs['land_area']) %>% # area_weight
+    mutate(used = crops + grazing + urban) %>%
     c(inputs) %>%
   transmute(anthrome = case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,
