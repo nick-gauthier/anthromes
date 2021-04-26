@@ -29,7 +29,18 @@ hyde2dgg <- function(hyde_varname, dgg, hyde_path){
 }
 
 #' @export
-get_hyde_pop <- function(hyde, by = NULL) {
+get_hyde_pop <- function(hyde, inputs, by = NULL) {
+  left_join(
+as_tibble(hyde),
+as_tibble(select(inputs, land_area)), by = 'geometry') %>%
+  select(-geometry) %>%
+  group_by({{ by }}, time) %>%
+  summarise(pop = sum(pop)) %>%
+  mutate(pop_percent = units::set_units(pop / max(pop) * 100, '%')) %>%
+  ungroup()
+}
+
+get_hyde_pop2 <- function(hyde, by = NULL) {
   hyde_pop %>%
     left_join(an12_dgg_inputs, by = 'ANL12_ID') %>%
     group_by({{ by }}, time_step) %>%
