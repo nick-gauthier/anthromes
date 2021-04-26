@@ -1,7 +1,7 @@
 Package: anthromes
 Title: Tools for Analyzing Long-Term Population and Land Use
 Version: 0.0.0.9000
-Authors@R:
+Authors@R:c(
     person(given = "Nicolas",
            family = "Gauthier",
            role = c("aut", "cre"),
@@ -16,6 +16,7 @@ Authors@R:
      person(given = "Arthur",
            family = "van Beusen",
            role = c("aut", "dtc"))
+           )
 Description: An R package for analyses of contemporary and historical land use and population on a global scale. Includes functions to download HYDE 3.2 and Anthromes-12k data (in both 5’ and Discrete Global Grid versions), apply the anthromes classification routine, and generate common summary tables and visualizations.
 License: MIT + file LICENSE
 ByteCompile: true
