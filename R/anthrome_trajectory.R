@@ -1,4 +1,4 @@
-#' Calculate Anthrome trajectories
+#' Calculate anthrome trajectories
 #'
 #' A convenience function to create summaries of the total land area in each
 #' anthrome type at each time step, potentially subset by an additional
@@ -15,6 +15,37 @@
 #' anthrome_trajectory(dat)
 #' # summary by biome
 #' anthrome_trajectory(dat, by = 'biome')
+#'
+anthrome_summary <- function(anthromes, inputs, by = NULL) {
+
+  # join the anthrome data to the supplemental inputs
+  if(is.na(st_raster_type(anthromes))) {
+    anthrome_area <- left_join(
+      as_tibble(anthromes),
+      as_tibble(select(inputs, land_area, {{ by }})), by = 'geometry') %>%
+      select(-geometry)
+  } else {
+    # if the data are in raster format, need to round the coordinates to join
+    anthrome_area <- left_join(
+      as_tibble(anthromes) %>% mutate(x = round(x, 6), y = round(y, 6)),
+      as_tibble(select(inputs, land_area))%>% mutate(x = round(x, 6), y = round(y, 6)),
+      by = c('x', 'y')) %>%
+      select(-x, -y)
+  }
+  anthrome_area %>%
+    count(time, anthrome, {{ by }}, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+    group_by(time, {{ by }}) %>%
+    mutate(area = units::set_units(land_area / sum(land_area) * 100, '%'), .keep = 'unused') %>%
+    ungroup() %>%
+    pivot_wider(id_cols = c({{ by }}, anthrome), names_from = time, values_from = area) %>%
+    arrange({{ by }}, anthrome)
+}
+# if land_area not available, could just count the grid cells in each class and give percent of those?
+
+#if returning all the dgg shapefiles in long format (replicated for each time) is too costly for global analysis, this is an alternative to return cell centroids (or alternatively just a spatial index)
+#test2 <- st_set_dimensions(anthromes_dgg, 1, values=st_centroid(st_dimensions(anthromes_dgg)$geometry$values))
+
+#' @export
 anthrome_trajectory <- function(data, by = NULL) {
   data %>%
     left_join(anthrome_key, by = 'anthrome') %>% # join before counting so empty factor levels are preserved
