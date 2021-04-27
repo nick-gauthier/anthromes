@@ -35,8 +35,9 @@ anthromes_classify <- function(dat, inputs){
   # should check that all columns are present
   dat %>%
     `/`(inputs['land_area']) %>% # area_weight
-    mutate(used = crops + grazing + urban) %>%
     c(inputs) %>%
+    mutate(used = crops + grazing + urban,
+           trees = pot_veg <= 8) %>%
   transmute(anthrome = case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,
     pop >= 100 & pot_vill == FALSE ~ 12L,

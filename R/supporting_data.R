@@ -1,6 +1,13 @@
-# These are several convenience datasets that make it easier to plot and analyze the anthromes data.
+#' Title
+#'
+#'These are several convenience datasets that make it easier to plot and analyze the anthromes data.
 # They largely include lookup tables to easily translate between numeric and character representations of anthromes, biomes, and other data,
 # as well as color ramps for easy plotting.
+#' @return
+#' @export
+#'
+#' @examples
+#'
 
 
 # Anthromes
@@ -88,6 +95,11 @@ anthrome_key <- tibble::tibble(
   )
 )
 
+#' @export
+anthrome_lookup <- anthrome_key %>%
+  dplyr::pull(class) %>%
+  setNames(anthrome_key$anthrome)
+
 
 # Time steps
 time_steps <-
@@ -107,20 +119,25 @@ time_steps_ordered <- factor(time_steps, levels = time_steps, ordered = TRUE)
 
 recent_time_steps <-  c("2012AD",  "2013AD",  "2014AD",  "2015AD",  "2016AD",  "2017AD")
 
-time_steps_millennia <-
+#' @export
+time_steps_millennia <- function() {
   c(
     "10000BC","9000BC","8000BC","7000BC","6000BC","5000BC","4000BC","3000BC",
     "2000BC","1000BC","0AD","1000AD","2000AD"
   )
+}
 
-time_steps_centuries <-
+#' @export
+time_steps_centuries <- function() {
   c(
     "0AD","100AD","200AD","300AD","400AD","500AD","600AD","700AD","800AD",
     "900AD","1000AD","1100AD","1200AD","1300AD","1400AD","1500AD","1600AD",
     "1700AD","1800AD","1900AD","2000AD"
   )
+}
 
-time_steps_decades <-
+#' @export
+time_steps_decades <- function() {
   c(
     "1700AD","1710AD","1720AD","1730AD","1740AD","1750AD","1760AD","1770AD",
     "1780AD","1790AD","1800AD","1810AD","1820AD","1830AD","1840AD","1850AD",
@@ -128,6 +145,8 @@ time_steps_decades <-
     "1940AD","1950AD","1960AD","1970AD","1980AD","1990AD","2000AD","2010AD",
     "2017AD"
   )
+}
+
 
 time_key <- tibble::tibble(time_step = time_steps_ordered,
                            year = c(
@@ -139,9 +158,9 @@ time_key <- tibble::tibble(time_step = time_steps_ordered,
                            ))
 
 period_key <- dplyr::mutate(tibble::tibble(time_step = time_steps_ordered),
-    millennia = time_step %in% time_steps_millennia,
-    centuries = time_step %in% time_steps_centuries,
-    decades = time_step %in% time_steps_decades
+    millennia = time_step %in% time_steps_millennia(),
+    centuries = time_step %in% time_steps_centuries(),
+    decades = time_step %in% time_steps_decades()
   )
 
 # Biomes

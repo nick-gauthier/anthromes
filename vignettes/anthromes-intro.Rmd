@@ -24,7 +24,6 @@ library(stars)
 library(tidyverse)
 # visualization packages
 library(gganimate)
-library(dataverse)
 library(patchwork)
 ```
 
@@ -36,36 +35,17 @@ bbox <- st_bbox(c(xmin = 29, xmax = 39, ymin = 30, ymax = 40), crs = 4326)
 
 # Download HYDE 3.2 data
 
-```{r, dataverse-database, echo = FALSE}
-test <- get_file('raw-data.zip',
-                      dataset = 'doi:10.7910/DVN/E3H3AK',
-                      server = 'dataverse.harvard.edu')
-```
 Read in the anthromes data as a stars object. stars in an R package for working with space-time cubes like the HYDE 3.2 data, which are spatial rasters representing multiple time steps.
 
 ```{r}
-# the hyde variable names of interest
-hyde_names <- c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', 'uopp')
-
-# hyde <- file.path('/vsizip/', 
-#                   'Users/nick/Desktop/HYDE.zip', 
-#                   paste0(hyde_names, '.tif')) %>%
-#   read_stars(proxy = TRUE) %>% # could use RasterIO = list(bands = xxx) to select bands
-#   st_crop(bbox) %>%
-#   setNames(., str_remove(names(.), '.tif')) %>%
-#   st_set_dimensions('band', names = 'time')
-
-hyde <- file.path('/Users/nick/Desktop/HYDE', 
-                  paste0(hyde_names, '.tif')) %>%
-  read_stars(proxy = TRUE) %>% # could use RasterIO = list(bands = xxx) to select bands
+hyde <- get_hyde(dir = '..') %>%
   st_crop(bbox) %>%
-  #setNames(., str_remove(names(.), '.tif')) %>% # reduntnat with next step
-  setNames(c('crops', 'grazing', 'rice', 'pop', 'irrigation', 'urban')) %>%
-  st_set_dimensions('band', names = 'time') %>%
-  st_as_stars()
+  st_as_stars() %>%
+  # change the names to something more readable
+  setNames(c('crops', 'grazing', 'rice', 'pop', 'irrigation', 'urban'))
 ```
 
-A stars object prints two pieces of information, the attribute data (which is essentially a tibble that can be manipulated via typical tidyverse functions) and dimenson information (which records the spatial and temporal dimensions of the object).
+A stars object prints two pieces of information, the attribute data (which is essentially a tibble that can be manipulated via typical tidyverse functions) and dimension information (which records the spatial and temporal dimensions of the object).
 
 ```{r}
 hyde
@@ -73,18 +53,15 @@ hyde
 
 Also load in the HYDE 3.2 supporting grids: land area, potential vegetation, and potential villages.
 ```{r}
-inputs <- list.files('../analysis/data/raw_data/supporting_5m_grids', full.names = TRUE)[c(2,4,5)] %>%
-  read_stars() %>%
-  setNames(c('land_area', 'pot_veg', 'pot_vill')) %>%
-  mutate(trees = pot_veg <= 8) %>%
-  st_crop(bbox)
+inputs <- get_hyde('inputs', dir = '..') %>%
+  st_crop(bbox) %>%
+  setNames(c('land_area', 'pot_veg', 'regions', 'iso', 'pot_vill'))
 ```
 
 You can easily plot these objects in ggplot using geom_stars().
 
 ```{r}
 ggplot() +
-  geom_stars(data = hyde[,,,8:13]) +
   facet_wrap(~time) +
   coord_quickmap() +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
@@ -119,47 +96,6 @@ ggplot() +
 # Apply anthromes classification
 
 ```{r}
-
-c(inputs, hyde)
-hyde %>% st_as_stars %>% anthromes_classify()
-
-(hyde / inputs['land_area']) %>%
- 
-
-inputs 
-
-test <- slice(hyde, 'time', 1) %>%
-  anthromes_classify(inputs)
-plot(test)
-
-hyde[,,,1] %>%
-  st_apply(1:2, function(x) anthromes_classify(x, inputs))
-
-hyde[,,,1:2] %>%
-  st_apply('time', function(x) mutate(test = 1))
-ggplot() +
-  geom_stars(data = test) +
-  scale_fill_distiller()
-  scale_fill_manual(anthrome_colors())
-  
-hyde[,,,1:5] / inputs['land_area']
-
-hyde[,,,1:5] %>%
-  merge %>%
-  `/`(inputs['land_area']) %>%
-  split('attributes')
-
-test <- merge(hyde[,,,1:5]) / inputs['land_area']
-
-ggplot() +
-  geom_stars(data = test) +
-  facet_grid(attributes~time) +
-  scale_fill_viridis_c()
-```
-
-```{r}
-anthrome_lookup <- anthrome_key %>% pull(class) %>% setNames(anthrome_key$anthrome)
-
 anthromes <- get_anthromes(hyde, inputs)
 ```
 
@@ -181,6 +117,10 @@ ggplot() +
   scale_fill_manual(values = anthrome_colors(), drop = FALSE) +
   theme_bw() +
   labs(title = 'Anthromes-12k', subtitle = 'Anthromes at {closest_state}', x = 'Latitude', y = 'Longitude')
+```
+
+```{r}
+knitr::knit_exit()
 ```
 
 # Discrete Global Grids
