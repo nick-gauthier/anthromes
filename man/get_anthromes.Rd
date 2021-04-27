@@ -7,20 +7,23 @@
 get_anthromes(hyde, inputs)
 }
 \arguments{
-\item{dat}{the tibble to apply the anthromes classification to. Must include
-columns for total population count and areal fractions of urban, rice,
-irrigation, crops, grazing lands as well as supporting data on potential
-vegetation and potential village status.}
+\item{hyde}{a stars object containing HYDE 3.2 data to apply the anthromes
+classification to. Must include columns for total population count and
+areal fractions of urban, rice, irrigation, crops, grazing lands as well as
+supporting data on potential vegetation and potential village status.}
+
+\item{inputs}{HYDE 3.2 fixed input data in stars format.}
 }
 \value{
-a tibble containing a new column for the resulting anthrome class
+a stars object containing the resulting anthrome classes with the
+same dimensions as hyde.
 }
 \description{
-Applies the Anthromes-12k classification algorithm from Ellis et al. 2020 to a tibble of population
-and land-use data.
+Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
+to a stars object of population and land-use data.
 }
 \examples{
-anthromes_classify(dat)
+get_anthromes(hyde_med, iputs_med)
 
 }
 \references{

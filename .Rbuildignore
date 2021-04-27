@@ -9,3 +9,5 @@
 ^\.circleci/config\.yml$
 analysis
 ^data-raw$
+^codecov\.yml$
+^\.github$

@@ -17,7 +17,14 @@ Authors@R: c(
            family = "van Beusen",
            role = c("aut", "dtc"))
            )
-Description: An R package for analyses of contemporary and historical land use and population on a global scale. Includes functions to download HYDE 3.2 and Anthromes-12k data (in both 5’ and Discrete Global Grid versions), apply the anthromes classification routine, and generate common summary tables and visualizations.
+Description: An R package for analyses of contemporary and historical land use 
+    and population on a global scale. Includes functions to download HYDE 3.2 
+    and Anthromes-12k data (in both 5’ and Discrete Global Grid versions from 
+    the Anthromes-12k-DGG repository at <https://doi.org/10.7910/DVN/E3H3AK>), 
+    apply the anthromes classification routine, extract data to an equal-area 
+    DGG system,and generate common summary tables and visualizations.
+URL: https://github.com/nick-gauthier/anthromes
+BugReports: https://github.com/nick-gauthier/anthromes/issues
 License: MIT + file LICENSE
 ByteCompile: true
 Encoding: UTF-8
@@ -25,21 +32,15 @@ LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Imports: 
-    bookdown,
     dggridR,
     dplyr (>= 1.0.4),
     exactextractr (>= 0.5.1),
-    ggplot2 (>= 3.3.3),
-    magick (>= 2.6.0),
-    patchwork (>= 1.1.1),
+    stars,
     purrr (>= 0.3.4),
     raster (>= 3.4-5),
-    scales (>= 1.1.1),
-    sf (>= 0.9-7),
-    stringr (>= 1.4.0),
-    tidyverse (>= 1.3.0),
     magrittr
 Suggests: 
+    covr,
     devtools,
     git2r,
     knitr,

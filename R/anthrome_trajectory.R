@@ -28,33 +28,49 @@ anthrome_summary <- function(anthromes, inputs, by = NULL) {
     # if the data are in raster format, need to round the coordinates to join
     anthrome_area <- left_join(
       as_tibble(anthromes) %>% mutate(x = round(x, 6), y = round(y, 6)),
-      as_tibble(select(inputs, land_area))%>% mutate(x = round(x, 6), y = round(y, 6)),
+      as_tibble(select(inputs, land_area)) %>%
+        mutate(x = round(x, 6), y = round(y, 6)),
       by = c('x', 'y')) %>%
       select(-x, -y)
   }
   anthrome_area %>%
-    count(time, anthrome, {{ by }}, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+    count(time, anthrome, {{ by }},
+          wt = land_area,
+          name = 'land_area',
+          .drop = FALSE) %>%
     group_by(time, {{ by }}) %>%
-    mutate(area = units::set_units(land_area / sum(land_area) * 100, '%'), .keep = 'unused') %>%
+    mutate(area = units::set_units(land_area / sum(land_area) * 100, '%'),
+           .keep = 'unused') %>%
     ungroup() %>%
-    pivot_wider(id_cols = c({{ by }}, anthrome), names_from = time, values_from = area) %>%
+    pivot_wider(id_cols = c({{ by }}, anthrome),
+                names_from = time,
+                values_from = area) %>%
     arrange({{ by }}, anthrome)
 }
-# if land_area not available, could just count the grid cells in each class and give percent of those?
+# if land_area not available,
+# could just count the grid cells in each class and give percent of those
 
-#if returning all the dgg shapefiles in long format (replicated for each time) is too costly for global analysis, this is an alternative to return cell centroids (or alternatively just a spatial index)
-#test2 <- st_set_dimensions(anthromes_dgg, 1, values=st_centroid(st_dimensions(anthromes_dgg)$geometry$values))
+#if returning all the dgg shapefiles in long format (replicated for each time)
+# is too costly for global analysis, this is an alternative to return cell
+# centroids (or alternatively just a spatial index)
+#test2 <- st_set_dimensions(anthromes_dgg, 1,
+# values=st_centroid(st_dimensions(anthromes_dgg)$geometry$values))
 
 #' @export
 anthrome_trajectory <- function(data, by = NULL) {
   data %>%
-    left_join(anthrome_key, by = 'anthrome') %>% # join before counting so empty factor levels are preserved
-    # this .drop argument turns the ordered time step factor into an unordered factor . . . factor handling could be more consistent
-    count(time_step, class, {{ by }}, wt = land_area, name = 'land_area', .drop = FALSE) %>%
+    # join before counting so empty factor levels are preserved
+    left_join(anthrome_key, by = 'anthrome') %>%
+    # this .drop argument turns the ordered time step factor into an
+    #unordered factor. factor handling could be more consistent
+    count(time_step, class, {{ by }},
+          wt = land_area, name = 'land_area',
+          .drop = FALSE) %>%
     left_join(time_key, by = 'time_step') %>%
-    mutate(period = case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
+    mutate(period =
+             case_when(year %in% c(seq(-10000, -1000, 1000), 1) ~ 'Millennia',
                               year %in% seq(100, 1700, 100) ~ 'Centuries',
-                              year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
+                          year %in%  c(seq(1710, 2010, 10), 2017) ~ 'Decades'),
            period = factor(period, c('Millennia', 'Centuries', 'Decades'))) %>%
     group_by(time_step, {{ by }}) %>%
     mutate(percent_land_area = land_area / sum(land_area)) %>%

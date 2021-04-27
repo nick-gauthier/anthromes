@@ -32,7 +32,7 @@ hyde2dgg <- function(hyde_varname, dgg, hyde_path){
 get_hyde_pop <- function(hyde, inputs, by = NULL) {
   left_join(
 as_tibble(hyde),
-as_tibble(select(inputs, land_area)), by = 'geometry') %>%
+as_tibble(inputs, land_area), by = 'geometry') %>%
   select(-geometry) %>%
   group_by({{ by }}, time) %>%
   summarise(pop = sum(pop)) %>%

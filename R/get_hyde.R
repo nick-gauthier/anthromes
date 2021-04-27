@@ -18,7 +18,9 @@ get_hyde <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irr
   hyde_dir <- file.path(dir, 'raw-data.zip')
 
   if(!file.exists(hyde_dir)){
-    message('Downloading "raw-data.zip" to ', normalizePath(dir), ' from Harvard Dataverse.')
+    message('Downloading "raw-data.zip" to ',
+            normalizePath(dir),
+            ' from Harvard Dataverse.')
     dataverse::get_file('raw-data.zip',
                         dataset = 'doi:10.7910/DVN/E3H3AK',
                         server = 'dataverse.harvard.edu') %>%
@@ -29,16 +31,22 @@ get_hyde <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irr
     paste0('/vsizip/vsizip/',
            hyde_dir,
            '/raw-data/supporting_5m_grids.zip/supporting_5m_grids/',
-           c('maxln_cr.tif', 'potveg15.tif', 'simple_regions.tif', 'iso_cr.tif', 'potvill20.tif')
-           ) %>%
+           c('maxln_cr.tif', 'potveg15.tif',
+             'simple_regions.tif', 'iso_cr.tif', 'potvill20.tif')
+    ) %>%
       read_stars() %>%
       setNames(c('land_area', 'pot_veg', 'regions', 'iso', 'pot_vill'))
 
   } else {
-    paste0('/vsizip/vsizip/vsizip/', hyde_dir, '/raw-data/HYDE.zip/HYDE/', vars, '.tif.zip/', vars, '.tif') %>%
-    read_stars() %>%
-    st_set_dimensions('band', names = 'time') %>%
-    setNames(., gsub('.tif', '', names(.)))
+    paste0('/vsizip/vsizip/vsizip/',
+           hyde_dir,
+           '/raw-data/HYDE.zip/HYDE/',
+           vars,
+           '.tif.zip/',
+           vars, '.tif') %>%
+      read_stars() %>%
+      st_set_dimensions('band', names = 'time') %>%
+      setNames(., gsub('.tif', '', names(.)))
   }
 }
 

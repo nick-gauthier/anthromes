@@ -1,40 +1,41 @@
 #' Anthromes classification
 #'
-#' Applies the Anthromes-12k classification algorithm from Ellis et al. 2020 to a tibble of population
-#' and land-use data.
+#' Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
+#' to a stars object of population and land-use data.
 #'
-#' @param dat the tibble to apply the anthromes classification to. Must include
-#' columns for total population count and areal fractions of urban, rice,
-#' irrigation, crops, grazing lands as well as supporting data on potential
-#' vegetation and potential village status.
+#' @param hyde a stars object containing HYDE 3.2 data to apply the anthromes
+#' classification to. Must include columns for total population count and
+#' areal fractions of urban, rice, irrigation, crops, grazing lands as well as
+#' supporting data on potential vegetation and potential village status.
+#' @param inputs HYDE 3.2 fixed input data in stars format.
 #'
-#' @return a tibble containing a new column for the resulting anthrome class
+#' @return a stars object containing the resulting anthrome classes with the
+#' same dimensions as hyde.
 #' @export
 #'
 #' @references Ellis, E.C., Beusen, A.H. and Goldewijk, K.K., 2020.
 #' Anthropogenic biomes: 10,000 BCE to 2015 CE. Land, 9(5), p.129.
 #'
 #' @examples
-#' anthromes_classify(dat)
+#' get_anthromes(hyde_med, inputs_med)
 #'
 get_anthromes <- function(hyde, inputs) {
-  time_dims <- st_get_dimension_values(hyde, 'time') # get the time values
+  time_dims <- stars::st_get_dimension_values(hyde, 'time')# get the time values
 
   seq_along(time_dims) %>% # iterate along the time steps
-    # the problem here is that the slice and map approach repeats the geometry vector a bunch of times ... slow!
-  map(~anthromes_classify(slice(hyde, 'time', .), inputs)) %>%
+    # the problem here is that the slice and map approach repeats the geometry
+    # vector a bunch of times ... slow!
+  purrr::map(~anthromes_classify(slice(hyde, 'time', .), inputs)) %>%
   do.call(c, .) %>%
   merge(name = 'time') %>%
-  st_set_dimensions('time', time_dims) %>%
+  stars::st_set_dimensions('time', time_dims) %>%
   setNames('anthrome') %>%
   mutate(anthrome = recode(anthrome, !!!anthrome_lookup))
 }
 
-#' @export
 anthromes_classify <- function(dat, inputs){
   # should check that all columns are present
-  dat %>%
-    `/`(inputs['land_area']) %>% # area_weight
+  (dat / inputs['land_area']) %>% # area_weight
     c(inputs) %>%
     mutate(used = crops + grazing + urban,
            trees = pot_veg <= 8) %>%
