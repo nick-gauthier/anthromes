@@ -1,7 +1,7 @@
 Package: anthromes
 Title: Tools for Analyzing Long-Term Population and Land Use
 Version: 0.0.0.9000
-Authors@R:c(
+Authors@R: c(
     person(given = "Nicolas",
            family = "Gauthier",
            role = c("aut", "cre"),
@@ -47,3 +47,5 @@ Suggests:
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3
+Depends: 
+    R (>= 2.10)

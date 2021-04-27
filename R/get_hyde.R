@@ -32,7 +32,7 @@ get_hyde <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irr
            c('maxln_cr.tif', 'potveg15.tif', 'simple_regions.tif', 'iso_cr.tif', 'potvill20.tif')
            ) %>%
       read_stars() %>%
-      setNames(., gsub('.tif', '', names(.)))
+      setNames(c('land_area', 'pot_veg', 'regions', 'iso', 'pot_vill'))
 
   } else {
     paste0('/vsizip/vsizip/vsizip/', hyde_dir, '/raw-data/HYDE.zip/HYDE/', vars, '.tif.zip/', vars, '.tif') %>%
@@ -44,5 +44,3 @@ get_hyde <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irr
 
 # url_hyde <- 'https://dataportaal.pbl.nl/downloads/HYDE/HYDE3.2/'
 # url_kk <- https://hs.pangaea.de/model/ALCC/KK10.nc
-
-

@@ -8,3 +8,4 @@
 ^Dockerfile$
 ^\.circleci/config\.yml$
 analysis
+^data-raw$
