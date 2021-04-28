@@ -21,7 +21,7 @@ First load the `anthromes` package.
 # analysis packages
 library(anthromes)
 library(stars)
-library(tidyverse)
+library(ggplot2)
 # visualization packages
 library(gganimate)
 library(patchwork)

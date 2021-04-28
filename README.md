@@ -9,7 +9,7 @@
 experimental](https://img.shields.io/badge/lifecycle-experimental-orange.svg)](https://lifecycle.r-lib.org/articles/stages.html#experimental)
 [![Codecov test
 coverage](https://codecov.io/gh/nick-gauthier/anthromes/branch/master/graph/badge.svg)](https://codecov.io/gh/nick-gauthier/anthromes?branch=master)
-[![check-release](https://github.com/nick-gauthier/anthromes/workflows/check-release/badge.svg)](https://github.com/nick-gauthier/anthromes/actions)
+[![R-CMD-check](https://github.com/nick-gauthier/anthromes/actions/workflows/check-release.yaml/badge.svg)](https://github.com/nick-gauthier/anthromes/actions/workflows/check-release.yaml)
 <!-- badges: end -->
 
 An R package for analyzing historical land use and population on a
