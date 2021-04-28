@@ -12,7 +12,7 @@ get_hyde(
 \arguments{
 \item{vars}{The HYDE 3.2 variables to import. Either any combination of
 'cropland', 'grazing', 'ir_rice', 'popc', 'tot_irri', or 'uopp' for the associated
-model output, or "inputs" for the HYDE 3.2 fixed inpus variables.}
+model output, or "inputs" for the HYDE 3.2 fixed inputs variables.}
 
 \item{dir}{The directory where the compressed HYDE data are. If the file 'raw-data.zip'
 is not currently in this directory, it will be downloaded from doi:10.7910/DVN/E3H3AK
@@ -26,6 +26,8 @@ If vars = 'input', a 2-dimensional stars object.
 Get HYDE 3.2 population and land use data
 }
 \examples{
+\dontrun{
 get_hyde() # Imports all the time-varying HYDE 3.2 data and downloads if necessary.
 get_hyde('inputs') # Imports the HYDE 3.2 fixed inputs
+}
 }

@@ -38,30 +38,31 @@ bbox <- st_bbox(c(xmin = 29, xmax = 39, ymin = 30, ymax = 40), crs = 4326)
 Read in the anthromes data as a stars object. stars in an R package for working with space-time cubes like the HYDE 3.2 data, which are spatial rasters representing multiple time steps.
 
 ```{r}
-hyde <- get_hyde(dir = '..') %>%
-  st_crop(bbox) %>%
-  st_as_stars() %>%
-  # change the names to something more readable
-  setNames(c('crops', 'grazing', 'rice', 'pop', 'irrigation', 'urban'))
+hyde_med
 ```
 
 A stars object prints two pieces of information, the attribute data (which is essentially a tibble that can be manipulated via typical tidyverse functions) and dimension information (which records the spatial and temporal dimensions of the object).
 
 ```{r}
-hyde
+hyde_med
 ```
+
+Stars objects are useful for many reasons. One is that they can take units. 
+```{r}
+hyde_med %>% mutate(crops = units::set_units(crops, km2))
+```
+
 
 Also load in the HYDE 3.2 supporting grids: land area, potential vegetation, and potential villages.
 ```{r}
-inputs <- get_hyde('inputs', dir = '..') %>%
-  st_crop(bbox) %>%
-  setNames(c('land_area', 'pot_veg', 'regions', 'iso', 'pot_vill'))
+inputs_med
 ```
 
 You can easily plot these objects in ggplot using geom_stars().
 
 ```{r}
 ggplot() +
+  geom_stars(data = hyde_med) +
   facet_wrap(~time) +
   coord_quickmap() +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
@@ -70,9 +71,9 @@ ggplot() +
 ```
 
 You can easily animate these data using gganimate. 
-```{r}
+```{r, eval = FALSE}
 ggplot() +
-  geom_stars(data = filter(hyde, time %in% time_steps_centuries)) +
+  geom_stars(data = filter(hyde_med)) +
   coord_quickmap() +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
   theme_bw() +
@@ -82,9 +83,9 @@ ggplot() +
 ```
 
 By default, geom_stars will only plot the first attribute. If you'd like to plot multiple attributes at a time, the easiest way is to convert the attributes to an extra dimension.
-```{r}
+```{r fig.width= 5, fig.height=3}
 ggplot() +
-  geom_stars(data = merge(hyde[1:2,,,8:13])) +
+  geom_stars(data = merge(hyde_med[c(1:2,5),,,])) +
   facet_grid(attributes~time) +
   coord_quickmap() +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
@@ -92,31 +93,22 @@ ggplot() +
   labs(title = 'HYDE 3.2 land use', x = 'Latitude', y = 'Longitude')
 ```
 
-
 # Apply anthromes classification
 
 ```{r}
-anthromes <- get_anthromes(hyde, inputs)
+anthromes <- get_anthromes(hyde_med, inputs_med)
 ```
+
+![](anthromes_flowchart.png)
 
 ```{r}
 ggplot() +
-  geom_stars(data = anthromes[,,,8:13]) +
+  geom_stars(data = anthromes) +
   facet_wrap(~time) +
   coord_quickmap() +
   scale_fill_manual(values = anthrome_colors(), drop = TRUE) +
   theme_bw() +
   labs(title = 'Anthromes-12k', x = 'Latitude', y = 'Longitude')
-```
-
-```{r}
-ggplot() +
-  geom_stars(data = filter(anthromes, time %in% time_steps_centuries)) +
-  transition_states(time) +
-  coord_quickmap() +
-  scale_fill_manual(values = anthrome_colors(), drop = FALSE) +
-  theme_bw() +
-  labs(title = 'Anthromes-12k', subtitle = 'Anthromes at {closest_state}', x = 'Latitude', y = 'Longitude')
 ```
 
 ```{r}
@@ -126,12 +118,9 @@ knitr::knit_exit()
 # Discrete Global Grids
 
 Rasters are great, but a hexagonal discrete global grid system would keep the cell areas the same and better represent shapes over the Earth's surface.
-```{r}
-dgg <- read_sf('../analysis/dgg_land.gpkg')[st_as_sfc(bbox),, op = st_covered_by]
-```
 
 ```{r, echo = FALSE}
-ggplot(dgg) +
+ggplot(dgg_med) +
   geom_sf() +
   theme_bw()
 ```
@@ -140,12 +129,12 @@ ggplot(dgg) +
 Use the get_dgg function to extract the HYDE 3.2 data using the DGG hexagons. It uses exact_extractr under the hood, which prints a progress bar by default.
 
 ```{r}
-crops <-  dgg_extract(hyde, dgg, 'crops')
+crops <-  dgg_extract(hyde_med, dgg_med, 'crops')
 ```
 
 ```{r}
 ggplot() +
-  geom_stars(data = (crops[,,8:13])) +
+  geom_stars(data = crops) +
   facet_wrap(~time) +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
   theme_bw() +
@@ -155,14 +144,14 @@ ggplot() +
 Let's compare it to the 5' raster
 ```{r}
 a <- ggplot() +
-  geom_stars(data = hyde[,,,13]) +
+  geom_stars(data = hyde_med[,,,5]) +
   coord_quickmap() +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
   theme_bw() +
   labs(title = 'HYDE 3.2 cropland', x = 'Latitude', y = 'Longitude')
 
 b <- ggplot() +
-  geom_stars(data = crops[,,13]) +
+  geom_stars(data = crops[,,5]) +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
   theme_bw() +
   labs(title = '', subtitle = 'Discrete global grid system', x = 'Latitude', y = 'Longitude')
@@ -172,23 +161,28 @@ a + b
 
 Map this function over the list of HYDE variable names.
 ```{r}
-hyde_dgg <- names(hyde) %>%
-  map(~dgg_extract(hyde, dgg, .)) %>%
+hyde_dgg <- names(hyde_med) %>%
+  map(~dgg_extract(hyde_med, dgg_med, var = ., fun = 'sum')) %>%
   do.call(c, .)
+```
+```{r fig.width= 5, fig.height=3}
+ggplot() +
+  geom_stars(data = merge(hyde_dgg[c(1:2,5),,])) +
+  facet_grid(attributes~time) +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  theme_bw() +
+  labs(title = 'HYDE 3.2 land use', x = 'Latitude', y = 'Longitude')
 ```
 
 And extract the fixed inputs as well.
 ```{r}
 # fold this into dgg_extract too?
-inputs_dgg <- exact_extract(as(merge(inputs), 'Raster'), dgg, c('sum', 'mode')) %>%
+inputs_dgg <- dgg_extract(merge(inputs_med), dgg_med, fun = c('sum', 'mode')) %>%
    dplyr::select(land_area = sum.land_area, 
                 pot_veg =  mode.pot_veg, 
-                pot_vill = mode.pot_vill) %>%
-    #rename_with(str_remove, pattern = 'sum.') %>% 
-    mutate(geometry = dgg$geom) %>%
-    st_as_sf() %>% 
-    st_as_stars() %>%
-    mutate(trees = pot_veg <= 8)
+                pot_vill = mode.pot_vill,
+                regions = mode.regions,
+                iso = mode.iso)
 ```
 
 Apply the anthromes classifier to each level
@@ -198,7 +192,7 @@ anthromes_dgg <- get_anthromes(hyde_dgg, inputs_dgg)
 
 ```{r}
 ggplot() +
-  geom_stars(data = anthromes_dgg[,,8:13]) +
+  geom_stars(data = anthromes_dgg) +
   facet_wrap(~time) +
   scale_fill_manual(values = anthrome_colors(), drop = TRUE) +
   theme_bw() +
@@ -206,35 +200,39 @@ ggplot() +
 ```
 
 ```{r}
-a <- ggplot() +
-  geom_stars(data = anthromes[,,,13]) +
+ ggplot() +
+  geom_stars(data = anthromes[,,,6]) +
   coord_quickmap() +
   scale_fill_manual(values = anthrome_colors(), drop = TRUE) +
   theme_bw() +
   labs(title = 'Anthromes-12k', x = 'Latitude', y = 'Longitude')
 
-b <- ggplot() +
-  geom_stars(data = anthromes_dgg[,,13]) +
+ggplot() +
+  geom_stars(data = anthromes_dgg[,,6]) +
   scale_fill_manual(values = anthrome_colors(), drop = TRUE) +
   theme_bw() +
   labs(title = 'Anthromes-12k DGG', x = 'Latitude', y = 'Longitude')
-
-a / b
 ```
 
-# Anthromes summary statistics
+
+## Summary statistics
  Use the anthrome_summary() function to produce formatted summary tables of the percent land area of under each anthrome type for each time period.
+ 
 ```{r}
 anthrome_summary(anthromes_dgg, inputs_dgg)
-anthrome_summary(anthromes, inputs)
 ```
 anthrome_summary() also has a "by" argument, which adds an additional grouping factor. The resulting summaries are now in percent of land area under each anthrome in each time period in each of the grouping variables.
 ```{r}
 anthrome_summary(anthromes_dgg, 
                  mutate(inputs_dgg, pot_veg = as.factor(pot_veg)), 
-                 by = pot_veg) %>%
-  select(all_of(time_steps_centuries))
+                 by = pot_veg)
 ```
+```{r}
+anthrome_summary(anthromes_dgg, 
+                 mutate(inputs_dgg, iso = as.factor(iso)), 
+                 by = iso)
+```
+
 You can also use the get_hyde_pop() function to extract population estimates from HYDE.
 ```{r}
 get_hyde_pop(hyde_dgg, inputs_dgg) %>%
@@ -242,14 +240,19 @@ get_hyde_pop(hyde_dgg, inputs_dgg) %>%
   geom_point() +
   stat_summary(fun.y=sum, geom="line")
 ```
+```{r}
+get_hyde_pop(hyde_dgg, inputs_dgg, by = iso) %>%
+  ggplot(aes(time, pop, group = iso)) +
+  geom_point() +
+  stat_summary(fun.y=sum, geom="line", aes(color = as.factor(iso))) +
+  theme_bw()
+```
 
-
-# Statistical modeling
+## Statistical modeling
 
 As stars objects, its easy to do statistical analyses on the data.
 ```{r}
 pc <- hyde_dgg %>%
-  select(-used) %>%
   as_tibble() %>%
   select(-geometry, -time) %>%
   prcomp(scale. = TRUE)
@@ -257,6 +260,132 @@ pc <- hyde_dgg %>%
 pc
 ```
 
+
+# Global analyses 
+
+```{r}
+get_hyde('inputs', dir = '..') %>% merge %>% plot
+```
+```{r}
+hyde <- get_hyde(dir = '..') %>%
+  st_crop(bbox) %>%
+  # current bug in stars loses offset info when filtered
+  #filter(time %in% time_steps_millennia()) %>% 
+  # so subset instead
+  .[,,,c(8,9,10,11,21,58)] %>%
+  st_as_stars() %>% 
+  # change the names to something more readable
+  setNames(c('crops', 'grazing', 'rice', 'pop', 'irrigation', 'urban'))
+```
+
+```{r}
+inputs <- get_hyde('inputs', dir = '..') %>%
+  st_crop(bbox)
+```
+
+
+# the rest
 ```{r}
 knitr::knit_exit()
 ```
+
+why does exact_extractr error here?
+```{r, eval = FALSE}
+test <- aggregate(hyde[,,,1], dgg, sum) 
+test2 <- aggregate(hyde[,,,1], dgg, sum, as_points = FALSE) 
+test3 <- aggregate(hyde[,,,1], dgg, sum, exact = TRUE) 
+test4 <- aggregate(hyde[,,,1], dgg, sum, as_points = FALSE, exact = TRUE) 
+```
+
+Why is get dgg anthromes so much slower for dgg
+```{r, eval = FALSE}
+    # the problem here is that the slice and map approach repeats the geometry vector a bunch of times ... slow!
+
+st_get_dimension_values(hyde_dgg, 'time') %>%
+  seq_along() %>% # iterate along the time steps
+
+  map(~anthromes_classify(slice(hyde, 'time', .), inputs)) %>%
+  do.call(c, .) 
+  
+    dat %>%
+    `/`(inputs['land_area']) %>% # area_weight
+    mutate(used = crops + grazing + urban) %>%
+    c(inputs) 
+```
+
+
+```{r}
+anthromes_classify2 <- function(crops, grazing, rice, pop, irrigation, urban, used, land_area, pot_veg, pot_vill){
+  case_when(
+    urban >= 0.2 | pop >= 2500 ~ 11L,
+    pop >= 100 & pot_vill == FALSE ~ 12L,
+    pop >= 100 & rice >= 0.2 ~ 21L,
+    pop >= 100 & irrigation >= 0.2 ~ 22L,
+    pop >= 100 & crops >= 0.2 ~ 23L,
+    pop >= 100 & grazing >= 0.2 ~ 24L,
+    pop >= 100 ~ 12L,
+    crops >= 0.2 & pop >= 10 & pop < 100 & irrigation >= 0.2 ~ 31L,
+    crops >= 0.2 & pop >= 10 & pop < 100 ~ 32L,
+    crops >= 0.2 & pop >= 1 & pop < 10 ~ 33L,
+    crops >= 0.2 & pop > 0 & pop < 1 ~ 34L,
+    grazing >= 0.2 & pop >= 10 & pop < 100 ~ 41L,
+    grazing >= 0.2 & pop >= 1 & pop < 10 ~ 42L,
+    grazing >= 0.2 & pop > 0 & pop < 1 ~ 43L,
+    trees == TRUE & pop >= 10 & pop < 100 ~ 51L,
+    trees == TRUE & pop >= 1 & pop < 10 ~ 52L,
+    trees == TRUE & pop > 0 & pop < 1 & used < 0.2 ~ 53L,
+    trees == TRUE & pop > 0 & pop < 1 & used >= 0.2 & crops >= grazing ~ 34L,
+    trees == TRUE & pop > 0 & pop < 1 & used >= 0.2 & crops < grazing ~ 43L,
+    pop > 0 & trees == FALSE & used < 0.2 ~ 54L,
+    pop > 0 & trees == FALSE & used >= 0.2 & crops >= grazing ~ 34L,
+    pop > 0 & trees == FALSE & used >= 0.2 & crops < grazing ~ 43L,
+    used >= 0.2 & crops >= 0.2 ~ 34L, # in python code but not paper
+    used >= 0.2 & grazing >= 0.2 ~ 43L, # in python code but not paper
+    used >= 0.2 & crops >= grazing ~ 34L,
+    used >= 0.2 & crops < grazing ~ 43L,
+    pot_veg != 15 & trees == TRUE ~ 61L,
+    pot_veg != 15 & trees == FALSE ~ 62L,
+    pot_veg == 15 & used > 0 ~ 62L, # in python code but not paper
+    pot_veg == 15 ~ 63L,
+    TRUE ~ 70L)
+}
+
+anthromes_classify2(c(0,1),c(0,1),c(0,1),c(0,1),c(0,1),c(0,1),c(0,1),c(0,1),c(0,1),c(0,1))
+
+
+anthrome_lookup[anthromes_classify2(1,1,1,1,1,0,1,0,1,1)]
+anthrome_lookup['11']
+```
+
+And animate it.
+```{r}
+ggplot() +
+  geom_stars(data = filter(hyde_dgg, time %in% time_steps_centuries)) +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  theme_bw() +
+  # use transition_states() from gganimate instead of facet_wrap 
+  gganimate::transition_states(time) +
+  labs(title = 'HYDE 3.2 land use', subtitle = 'Cropland at {closest_state}', x = 'Latitude', y = 'Longitude')
+```
+
+
+```{r}
+
+
+saveRDS(hyde, 'hyde.rds')
+write_stars(hyde %>% merge, 'hyde.nc')
+library(gdalcubes)
+
+gdalcubes::write_ncdf(hyde, 'hyde.nc')
+
+# there looks like a bug so that filtering looses dimension information
+hyde;
+hyde %>% filter(time %in% time_steps_centuries())
+hyde[,,,which(st_get_dimension_values(hyde, 'time') %in% time_steps_centuries())]
+readRDS('hyde.rds')
+slice(hyde, 'time', 1) %>% c(inputs)
+#yes, because the following works
+slice(hyde, 'time', 1) %>% c(filter(inputs))
+
+```
+

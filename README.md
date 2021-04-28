@@ -41,39 +41,174 @@ devtools::install_github("nick-gauthier/anthromes")
 
 ## Example
 
-This is a basic example which shows you how to solve a common problem:
-
 ``` r
 library(anthromes)
-## basic example code
+library(stars)
+#> Loading required package: abind
+#> Loading required package: sf
+#> Linking to GEOS 3.8.1, GDAL 3.1.4, PROJ 6.3.1
+library(ggplot2)
 ```
 
-What is special about using `README.Rmd` instead of just `README.md`?
-You can include R chunks like so:
+Read in the anthromes data as a stars object. stars in an R package for
+working with space-time cubes like the HYDE 3.2 data, which are spatial
+rasters representing multiple time steps. A stars object prints two
+pieces of information, the attribute data (which is essentially a tibble
+that can be manipulated via typical tidyverse functions) and dimension
+information (which records the spatial and temporal dimensions of the
+object).
 
 ``` r
-summary(cars)
-#>      speed           dist       
-#>  Min.   : 4.0   Min.   :  2.00  
-#>  1st Qu.:12.0   1st Qu.: 26.00  
-#>  Median :15.0   Median : 36.00  
-#>  Mean   :15.4   Mean   : 42.98  
-#>  3rd Qu.:19.0   3rd Qu.: 56.00  
-#>  Max.   :25.0   Max.   :120.00
+hyde_med
+#> stars object with 3 dimensions and 6 attributes
+#> attribute(s):
+#>      crops           grazing           rice              pop           
+#>  Min.   : 0.000   Min.   : 0.000   Min.   : 0.000   Min.   :      0.0  
+#>  1st Qu.: 0.000   1st Qu.: 0.068   1st Qu.: 0.000   1st Qu.:     65.2  
+#>  Median : 1.399   Median : 0.942   Median : 0.000   Median :    222.5  
+#>  Mean   : 8.579   Mean   : 4.007   Mean   : 0.106   Mean   :   2060.5  
+#>  3rd Qu.:10.349   3rd Qu.: 3.382   3rd Qu.: 0.000   3rd Qu.:    620.8  
+#>  Max.   :74.328   Max.   :74.077   Max.   :73.823   Max.   :1802804.1  
+#>  NA's   :27132    NA's   :27132    NA's   :27132    NA's   :27132      
+#>   irrigation          urban       
+#>  Min.   : 0.000   Min.   : 0.000  
+#>  1st Qu.: 0.000   1st Qu.: 0.000  
+#>  Median : 0.000   Median : 0.000  
+#>  Mean   : 1.372   Mean   : 0.114  
+#>  3rd Qu.: 0.000   3rd Qu.: 0.000  
+#>  Max.   :74.203   Max.   :74.328  
+#>  NA's   :27132    NA's   :27132   
+#> dimension(s):
+#>      from   to  offset      delta refsys point            values x/y
+#> x    2509 2629    -180  0.0833333 WGS 84 FALSE              NULL [x]
+#> y     600  720 89.9999 -0.0833333 WGS 84 FALSE              NULL [y]
+#> time    1    6      NA         NA     NA    NA 3000BC,...,2000AD
 ```
 
-You’ll still need to render `README.Rmd` regularly, to keep `README.md`
-up-to-date. `devtools::build_readme()` is handy for this. You could also
-use GitHub Actions to re-render `README.Rmd` every time you push. An
-example workflow can be found here:
-<https://github.com/r-lib/actions/tree/master/examples>.
+You can easily plot these objects in ggplot using geom\_stars().
 
-You can also embed plots, for example:
+``` r
+ggplot() +
+  geom_stars(data = hyde_med) +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  facet_wrap(~time) +
+  labs(title = 'HYDE 3.2 cropland', x = 'Latitude', y = 'Longitude') +
+  coord_quickmap() +
+  theme_bw()
+```
 
-<img src="man/figures/README-pressure-1.png" width="100%" />
+<img src="man/figures/README-sample_plot-1.png" width="100%" /> By
+default, geom\_stars will only plot the first attribute. If you’d like
+to plot multiple attributes at a time, the easiest way is to convert the
+attributes to an extra dimension.
 
-In that case, don’t forget to commit and push the resulting figure
-files, so they display on GitHub and CRAN.
+``` r
+ggplot() +
+  geom_stars(data = merge(hyde_med[c(1:2,5),,,])) +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  facet_grid(attributes~time) +
+  labs(title = 'HYDE 3.2 land use', x = 'Latitude', y = 'Longitude') +
+  coord_quickmap() +
+  theme_bw()
+```
+
+<img src="man/figures/README-attributes-1.png" width="100%" />
+
+You can easily animate these data using gganimate.
+
+``` r
+ggplot() +
+  geom_stars(data = hyde_med) +
+  scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
+  # use transition_states() from gganimate instead of facet_wrap to animate
+  gganimate::transition_states(time, transition_length = 0.5) +
+  labs(title = 'HYDE 3.2 land use', 
+       subtitle = 'Cropland at {closest_state}', 
+       x = 'Latitude', y = 'Longitude') +
+  coord_quickmap() +
+  theme_bw()
+```
+
+<img src="man/figures/README-animation-1.gif" width="100%" />
+
+## Anthromes classification
+
+The main function of the package is get\_anthromes(), which applies the
+anthromes v2.1 classification algorithm originally presented in &gt;
+Ellis, E.C., A.H.W. Beusen, K. Klein Goldewijk, (202). *Anthropogenic
+Biomes: 10,000 BCE to 2015 CE*. Land, 9 (5). &gt;
+<https://doi.org/10.3390/LAND9050129>
+
+And later modified in *Ellis et al. 2021* above.
+
+![‘Anthromes classification flowchart (v2.1) from *Ellis et
+al. 2020*.’](vignettes/anthromes_flowchart.png)
+
+get\_anthromes() requires the HYDE 3.2 data in a spatio-temporal array,
+along with a 2-dimensional array of fixed input variables such as land
+area and potential natural vegetation.
+
+``` r
+anthromes <- get_anthromes(hyde_med, inputs_med)
+```
+
+The result is a stars object with the resulting anthromes
+classification, with the same spatial and temporal dimensions as the
+original HYDE data.
+
+``` r
+anthromes
+#> stars object with 3 dimensions and 1 attribute
+#> attribute(s):
+#>                          anthrome     
+#>  Inhabited drylands           :33235  
+#>  NODATA                       :27132  
+#>  Residential rainfed croplands: 6460  
+#>  Wild drylands                : 4204  
+#>  Populated woodlands          : 4093  
+#>  Populated croplands          : 3842  
+#>  (Other)                      : 8880  
+#> dimension(s):
+#>      from   to  offset      delta refsys point            values x/y
+#> x    2509 2629    -180  0.0833333 WGS 84 FALSE              NULL [x]
+#> y     600  720 89.9999 -0.0833333 WGS 84 FALSE              NULL [y]
+#> time    1    6      NA         NA     NA    NA 3000BC,...,2000AD
+```
+
+As above, these data can be easily plotted in ggplot using geom\_stars.
+The default anthromes color scheme is provided in the function
+anthrome\_colors() for convenience.
+
+``` r
+ggplot() +
+  geom_stars(data = anthromes) +
+  facet_wrap(~time) +
+  coord_quickmap() +
+  scale_fill_manual(values = anthrome_colors(), drop = TRUE) +
+  theme_bw() +
+  labs(title = 'Anthromes-12k', x = 'Latitude', y = 'Longitude')
+```
+
+<img src="man/figures/README-anthromes-1.png" width="100%" /> Create
+nicely formatted summaries of the percent land area in each anthrome.
+
+``` r
+anthrome_summary(anthromes, inputs_med)
+#> # A tibble: 21 x 7
+#>    anthrome            `3000BC`  `2000BC`  `1000BC`      `0AD` `1000AD` `2000AD`
+#>    <fct>                    [%]       [%]       [%]        [%]      [%]      [%]
+#>  1 Urban              0.000000… 0.000000… 0.000000…  0.000000… 0.00000…  1.3435…
+#>  2 Mixed settlements  0.010362… 0.010362… 0.010362…  0.021014… 0.12557…  1.1911…
+#>  3 Rice villages      0.000000… 0.000000… 0.010689…  0.085413… 0.14963…  0.8229…
+#>  4 Irrigated villages 0.000000… 0.105933… 0.287752…  0.546544… 1.05498…  5.4193…
+#>  5 Rainfed villages   0.038284… 0.048964… 0.079556…  0.712320… 0.14186…  7.1569…
+#>  6 Pastoral villages  0.000000… 0.000000… 0.000000…  0.000000… 0.00000…  0.9703…
+#>  7 Residential irrig… 1.154401… 1.280373… 1.158554…  0.569328… 1.15223…  4.0399…
+#>  8 Residential rainf… 2.358643… 3.554338… 7.731140… 11.824162… 9.47797… 27.5704…
+#>  9 Populated croplan… 4.983536… 5.683022… 5.204140…  4.615843… 5.16068… 10.5713…
+#> 10 Remote croplands   0.521449… 1.466865… 2.471521…  3.037484… 3.70718…  2.0869…
+#> # … with 11 more rows
+```
 
 ### How to cite
 

@@ -14,7 +14,7 @@ Authors@R: c(
            family = "Klein Goldewijk",
            role = c("aut", "dtc")),
      person(given = "Arthur",
-           family = "van Beusen",
+           family = "Beusen",
            role = c("aut", "dtc"))
            )
 Description: An R package for analyses of contemporary and historical land use 
@@ -35,6 +35,9 @@ Imports:
     dplyr (>= 1.0.4),
     exactextractr (>= 0.5.1),
     stars,
+    sf,
+    dataverse,
+    tidyr,
     purrr (>= 0.3.4),
     raster (>= 3.4-5),
     magrittr
@@ -43,7 +46,11 @@ Suggests:
     devtools,
     git2r,
     knitr,
+    units,
     rmarkdown,
+    markdown,
+    gganimate,
+    patchwork,
     testthat (>= 3.0.0)
 VignetteBuilder: knitr
 Config/testthat/edition: 3

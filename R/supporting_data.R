@@ -1,16 +1,13 @@
-#' Title
+#' Supplemental data
 #'
-#'These are several convenience datasets that make it easier to plot and analyze the anthromes data.
-# They largely include lookup tables to easily translate between numeric and character representations of anthromes, biomes, and other data,
-# as well as color ramps for easy plotting.
+#'These are several convenience datasets that make it easier to plot and
+#'analyze the anthromes data. They primarily include lookup tables to easily
+#'translate between numeric and character representations of anthromes, biomes,
+#'and other data, as well as color ramps for easy plotting.
 #' @return
 #' @export
 #'
-#' @examples
-#'
-
-
-# Anthromes
+#' @examples time_steps_centuries()
 anthrome_key <- tibble::tibble(
   anthrome = c(
     11, 12, 21, 22, 23, 24, 31, 32, 33, 34,

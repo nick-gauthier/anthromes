@@ -2,7 +2,9 @@
 % Please edit documentation in R/anthromes_classify.R
 \name{get_anthromes}
 \alias{get_anthromes}
-\title{Anthromes classification}
+\title{Anthromes classification
+Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
+to a stars object of population and land-use data.}
 \usage{
 get_anthromes(hyde, inputs)
 }
@@ -19,12 +21,12 @@ a stars object containing the resulting anthrome classes with the
 same dimensions as hyde.
 }
 \description{
+Anthromes classification
 Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
 to a stars object of population and land-use data.
 }
 \examples{
 get_anthromes(hyde_med, inputs_med)
-
 }
 \references{
 Ellis, E.C., Beusen, A.H. and Goldewijk, K.K., 2020.

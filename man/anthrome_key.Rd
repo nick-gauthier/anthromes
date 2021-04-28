@@ -3,7 +3,7 @@
 \docType{data}
 \name{anthrome_key}
 \alias{anthrome_key}
-\title{Title}
+\title{Supplemental data}
 \format{
 An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) with 21 rows and 4 columns.
 }
@@ -14,9 +14,12 @@ anthrome_key
 
 }
 \description{
-These are several convenience datasets that make it easier to plot and analyze the anthromes data.
+These are several convenience datasets that make it easier to plot and
+analyze the anthromes data. They primarily include lookup tables to easily
+translate between numeric and character representations of anthromes, biomes,
+and other data, as well as color ramps for easy plotting.
 }
 \examples{
-
+time_steps_centuries()
 }
 \keyword{datasets}

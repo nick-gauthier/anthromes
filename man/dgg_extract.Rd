@@ -20,5 +20,5 @@ dgg_extract(dat, dgg, var = NULL, fun)
 Extract raster data with a DGG shapefile
 }
 \examples{
-dgg_extract(hyde, dgg, 'crops')
+dgg_extract(hyde_med, dgg_med, 'crops', 'sum')
 }
