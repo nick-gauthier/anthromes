@@ -49,7 +49,7 @@ hyde_med
 
 Stars objects are useful for many reasons. One is that they can take units. 
 ```{r}
-hyde_med %>% mutate(crops = units::set_units(crops, km2))
+hyde_med %>% dplyr::mutate(crops = units::set_units(crops, km2))
 ```
 
 
