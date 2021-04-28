@@ -13,17 +13,17 @@
 #' @export
 #'
 #' @references Ellis, E.C., Beusen, A.H. and Goldewijk, K.K., 2020.
-#' Anthropogenic biomes: 10,000 BCE to 2015 CE. Land, 9(5), p.129.
+#' Anthropogenic biomes: 10,000 BCE to 2015 CE. Land, 9 (5), p.129.
 #'
 #' @examples
-#' get_anthromes(hyde_med, inputs_med)
-get_anthromes <- function(hyde, inputs) {
+#' anthrome_classify(hyde_med, inputs_med)
+anthrome_classify <- function(hyde, inputs) {
   time_dims <- stars::st_get_dimension_values(hyde, 'time')# get the time values
 
   seq_along(time_dims) %>% # iterate along the time steps
     # the problem here is that the slice and map approach repeats the geometry
     # vector a bunch of times ... slow!
-  purrr::map(~anthromes_classify(slice(hyde, 'time', .), inputs)) %>%
+  purrr::map(~anthrome_casewhen(slice(hyde, 'time', .), inputs)) %>%
   do.call(c, .) %>%
   merge(name = 'time') %>%
   stars::st_set_dimensions('time', time_dims) %>%
@@ -31,12 +31,13 @@ get_anthromes <- function(hyde, inputs) {
   mutate(anthrome = recode(anthrome, !!!anthrome_lookup))
 }
 
-anthromes_classify <- function(dat, inputs){
+anthrome_casewhen <- function(dat, inputs){
   # should check that all columns are present
   (dat / inputs['land_area']) %>% # area_weight
     c(inputs) %>%
     mutate(used = crops + grazing + urban,
-           trees = pot_veg <= 8) %>%
+           trees = pot_veg %in% biome_key$biome15[1:8],
+           ice = pot_veg == 'Polar Desert, Rock, and Ice') %>%
   transmute(anthrome = case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,
     pop >= 100 & pot_vill == FALSE ~ 12L,
@@ -64,10 +65,10 @@ anthromes_classify <- function(dat, inputs){
     used >= 0.2 & grazing >= 0.2 ~ 43L, # in python code but not paper
     used >= 0.2 & crops >= grazing ~ 34L,
     used >= 0.2 & crops < grazing ~ 43L,
-    pot_veg != 15 & trees == TRUE ~ 61L,
-    pot_veg != 15 & trees == FALSE ~ 62L,
-    pot_veg == 15 & used > 0 ~ 62L, # in python code but not paper
-    pot_veg == 15 ~ 63L,
+    ice == FALSE & trees == TRUE ~ 61L,
+    ice == FALSE & trees == FALSE ~ 62L,
+    ice == TRUE & used > 0 ~ 62L, # in python code but not paper
+    ice == TRUE ~ 63L,
     TRUE ~ NA_integer_)
   )
 }

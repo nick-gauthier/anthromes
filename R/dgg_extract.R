@@ -1,8 +1,13 @@
 #' Extract raster data with a DGG shapefile
 #'
+#' Given a stars data object and shapefile, extracts the relevant data using
+#' exactextractr::exact_extract(). Stars inputs should be in raster format with
+#' x and y dimensions. This function is planned for deprecation whenever direct
+#' support for exact_extract() is better supported via stars::aggregate().
 #' @param dat The raster data to extract.
 #' @param dgg Shapefile containing the DGG boundaries of to use for the extraction
 #' @param var The variable to extract.
+#' @param fun The function to pass to exactextractr::exact_extract().
 #'
 #' @return
 #' @export

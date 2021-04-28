@@ -17,9 +17,16 @@ anthrome_key
 These are several convenience datasets that make it easier to plot and
 analyze the anthromes data. They primarily include lookup tables to easily
 translate between numeric and character representations of anthromes, biomes,
-and other data, as well as color ramps for easy plotting.
+and other data, as well as color ramps for easy plotting. The biome data are
+derived from the 15-class potential natural vegetation dataset of
+Ramankutty, N. and Foley, J.A., 1999. Estimating historical changes in global
+land cover: Croplands from 1700 to 1992. Global biogeochemical cycles,
+13(4), pp.997-1027, along with a simplicification using only 9 classes.
 }
 \examples{
-time_steps_centuries()
+time_steps_millennia
+time_steps_centuries
+time_steps_years
+time_steps
 }
 \keyword{datasets}

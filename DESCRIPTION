@@ -46,6 +46,7 @@ Imports:
 Suggests: 
     covr,
     devtools,
+    ggplot2,
     git2r,
     knitr,
     units,

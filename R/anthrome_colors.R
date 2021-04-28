@@ -2,6 +2,9 @@
 #'
 #' Convenience functions for returning color tables for anthrome classes,
 #' levels, and types
+#' @param kind The anthrome color palette to return. One of "class", "level",
+#' or "type". Defaults to "class" the color palette for the full 21 anthrome
+#' classes.
 #' @return
 #' @export
 #'

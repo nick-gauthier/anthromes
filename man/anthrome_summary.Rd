@@ -7,9 +7,13 @@
 anthrome_summary(anthromes, inputs, by = NULL)
 }
 \arguments{
+\item{anthromes}{A stars object containing the anthrome classification.}
+
+\item{inputs}{A stars object containing HYDE 3.2 fixed inputs.}
+
 \item{by}{a column in data by which to group the anthrome data before summary}
 
-\item{data}{a tibble containing the anthrome classification over time}
+\item{hyde}{A stars object containing HYDE 3.2 land use and population data.}
 }
 \value{
 

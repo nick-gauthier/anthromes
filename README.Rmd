@@ -21,7 +21,7 @@ knitr::opts_chunk$set(
 [![R-CMD-check](https://github.com/nick-gauthier/anthromes/actions/workflows/check-release.yaml/badge.svg)](https://github.com/nick-gauthier/anthromes/actions/workflows/check-release.yaml)
 <!-- badges: end -->
 
-An R package for analyzing historical land use and population on a regional to global scales. It includes functions to download HYDE 3.2 and Anthromes-12k data (from the Anthromes-12k-DGG repository at <https://doi.org/10.7910/DVN/E3H3AK>), apply the anthromes classification, extract raster data using an equal-area discrete global grid system, and generate common summary tables and visualizations. 
+An R package for analyzing historical land use and population on regional to global scales. It includes functions to download HYDE 3.2 and Anthromes-12k data (from the Anthromes-12k-DGG repository at <https://doi.org/10.7910/DVN/E3H3AK>), manipulate them as spatio-temporal arrays, apply the anthromes classification, extract raster data using an equal-area discrete global grid system, and generate common summary tables and visualizations. 
 
 It is based on (and supersedes) the R research compendium used to generate the analyses and figures for:
 
@@ -91,7 +91,7 @@ ggplot() +
 
 ## Anthromes classification
 
-The main function of the package is get_anthromes(), which applies the anthromes v2.1 classification algorithm originally presented in 
+The main function of the package is anthrome_classify(), which applies the anthromes v2.1 classification algorithm originally presented in 
 > Ellis, E.C., A.H.W. Beusen, K. Klein Goldewijk, (202). *Anthropogenic Biomes: 10,000 BCE to 2015 CE*. Land, 9 (5).
 > <https://doi.org/10.3390/LAND9050129>
 
@@ -99,9 +99,9 @@ And later modified in *Ellis et al. 2021* above.
 
 !['Anthromes classification flowchart (v2.1) from *Ellis et al. 2020*.'](vignettes/anthromes_flowchart.png)
 
-get_anthromes() requires the HYDE 3.2 data in a spatio-temporal array, along with a 2-dimensional array of fixed input variables such as land area and potential natural vegetation.
+anthrome_classify() requires the HYDE 3.2 data in a spatio-temporal array, along with a 2-dimensional array of fixed input variables such as land area and potential natural vegetation.
 ```{r}
-anthromes <- get_anthromes(hyde_med, inputs_med)
+anthromes <- anthrome_classify(hyde_med, inputs_med)
 ```
 
 The result is a stars object with the resulting anthromes classification, with the same spatial and temporal dimensions as the original HYDE data.

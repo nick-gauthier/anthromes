@@ -12,12 +12,17 @@ dgg_extract(dat, dgg, var = NULL, fun)
 \item{dgg}{Shapefile containing the DGG boundaries of to use for the extraction}
 
 \item{var}{The variable to extract.}
+
+\item{fun}{The function to pass to exactextractr::exact_extract().}
 }
 \value{
 
 }
 \description{
-Extract raster data with a DGG shapefile
+Given a stars data object and shapefile, extracts the relevant data using
+exactextractr::exact_extract(). Stars inputs should be in raster format with
+x and y dimensions. This function is planned for deprecation whenever direct
+support for exact_extract() is better supported via stars::aggregate().
 }
 \examples{
 dgg_extract(hyde_med, dgg_med, 'crops', 'sum')

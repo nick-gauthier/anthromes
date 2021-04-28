@@ -6,6 +6,11 @@
 \usage{
 anthrome_colors(kind = "class")
 }
+\arguments{
+\item{kind}{The anthrome color palette to return. One of "class", "level",
+or "type". Defaults to "class" the color palette for the full 21 anthrome
+classes.}
+}
 \value{
 
 }

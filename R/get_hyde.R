@@ -35,8 +35,10 @@ get_hyde <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irr
            c('maxln_cr.tif', 'potveg15.tif',
              'simple_regions.tif', 'iso_cr.tif', 'potvill20.tif')
     ) %>%
-      read_stars() %>%
-      setNames(c('land_area', 'pot_veg', 'regions', 'iso', 'pot_vill'))
+      stars::read_stars() %>%
+      setNames(c('land_area', 'pot_veg', 'regions', 'iso', 'pot_vill')) %>%
+      mutate(pot_veg =  dplyr::recode(pot_veg, !!!biome_lookup),
+             regions =  dplyr::recode(regions, !!!region_lookup))
 
   } else {
     paste0('/vsizip/vsizip/vsizip/',
@@ -45,8 +47,8 @@ get_hyde <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc', 'tot_irr
            vars,
            '.tif.zip/',
            vars, '.tif') %>%
-      read_stars() %>%
-      st_set_dimensions('band', names = 'time') %>%
+      stars::read_stars() %>%
+      stars::st_set_dimensions('band', names = 'time') %>%
       setNames(., gsub('.tif', '', names(.)))
   }
 }

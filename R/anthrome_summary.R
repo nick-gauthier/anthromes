@@ -4,7 +4,9 @@
 #' anthrome type at each time step, potentially subset by an additional
 #' variable.
 #'
-#' @param data a tibble containing the anthrome classification over time
+#' @param anthromes A stars object containing the anthrome classification.
+#' @param hyde A stars object containing HYDE 3.2 land use and population data.
+#' @param inputs A stars object containing HYDE 3.2 fixed inputs.
 #' @param by a column in data by which to group the anthrome data before summary
 #'
 #' @return

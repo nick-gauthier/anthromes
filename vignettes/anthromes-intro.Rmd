@@ -21,6 +21,7 @@ First load the `anthromes` package.
 # analysis packages
 library(anthromes)
 library(stars)
+library(dplyr)
 library(ggplot2)
 # visualization packages
 library(gganimate)
@@ -96,7 +97,7 @@ ggplot() +
 # Apply anthromes classification
 
 ```{r}
-anthromes <- get_anthromes(hyde_med, inputs_med)
+anthromes <- anthrome_classify(hyde_med, inputs_med)
 ```
 
 ![](anthromes_flowchart.png)
@@ -187,7 +188,7 @@ inputs_dgg <- dgg_extract(merge(inputs_med), dgg_med, fun = c('sum', 'mode')) %>
 
 Apply the anthromes classifier to each level
 ```{r}
-anthromes_dgg <- get_anthromes(hyde_dgg, inputs_dgg)
+anthromes_dgg <- anthrome_classify(hyde_dgg, inputs_dgg)
 ```
 
 ```{r}
@@ -270,7 +271,7 @@ get_hyde('inputs', dir = '..') %>% merge %>% plot
 hyde <- get_hyde(dir = '..') %>%
   st_crop(bbox) %>%
   # current bug in stars loses offset info when filtered
-  #filter(time %in% time_steps_millennia()) %>% 
+  #filter(time %in% time_steps_millennia) %>% 
   # so subset instead
   .[,,,c(8,9,10,11,21,58)] %>%
   st_as_stars() %>% 
@@ -380,8 +381,8 @@ gdalcubes::write_ncdf(hyde, 'hyde.nc')
 
 # there looks like a bug so that filtering looses dimension information
 hyde;
-hyde %>% filter(time %in% time_steps_centuries())
-hyde[,,,which(st_get_dimension_values(hyde, 'time') %in% time_steps_centuries())]
+hyde %>% filter(time %in% time_steps_centuries)
+hyde[,,,which(st_get_dimension_values(hyde, 'time') %in% time_steps_centuries)]
 readRDS('hyde.rds')
 slice(hyde, 'time', 1) %>% c(inputs)
 #yes, because the following works

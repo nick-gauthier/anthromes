@@ -12,12 +12,13 @@ coverage](https://codecov.io/gh/nick-gauthier/anthromes/branch/master/graph/badg
 [![R-CMD-check](https://github.com/nick-gauthier/anthromes/actions/workflows/check-release.yaml/badge.svg)](https://github.com/nick-gauthier/anthromes/actions/workflows/check-release.yaml)
 <!-- badges: end -->
 
-An R package for analyzing historical land use and population on a
+An R package for analyzing historical land use and population on
 regional to global scales. It includes functions to download HYDE 3.2
 and Anthromes-12k data (from the Anthromes-12k-DGG repository at
-<https://doi.org/10.7910/DVN/E3H3AK>), apply the anthromes
-classification, extract raster data using an equal-area discrete global
-grid system, and generate common summary tables and visualizations.
+<https://doi.org/10.7910/DVN/E3H3AK>), manipulate them as
+spatio-temporal arrays, apply the anthromes classification, extract
+raster data using an equal-area discrete global grid system, and
+generate common summary tables and visualizations.
 
 It is based on (and supersedes) the R research compendium used to
 generate the analyses and figures for:
@@ -133,8 +134,8 @@ ggplot() +
 
 ## Anthromes classification
 
-The main function of the package is get\_anthromes(), which applies the
-anthromes v2.1 classification algorithm originally presented in &gt;
+The main function of the package is anthrome\_classify(), which applies
+the anthromes v2.1 classification algorithm originally presented in &gt;
 Ellis, E.C., A.H.W. Beusen, K. Klein Goldewijk, (202). *Anthropogenic
 Biomes: 10,000 BCE to 2015 CE*. Land, 9 (5). &gt;
 <https://doi.org/10.3390/LAND9050129>
@@ -144,12 +145,12 @@ And later modified in *Ellis et al. 2021* above.
 ![‘Anthromes classification flowchart (v2.1) from *Ellis et
 al. 2020*.’](vignettes/anthromes_flowchart.png)
 
-get\_anthromes() requires the HYDE 3.2 data in a spatio-temporal array,
-along with a 2-dimensional array of fixed input variables such as land
-area and potential natural vegetation.
+anthrome\_classify() requires the HYDE 3.2 data in a spatio-temporal
+array, along with a 2-dimensional array of fixed input variables such as
+land area and potential natural vegetation.
 
 ``` r
-anthromes <- get_anthromes(hyde_med, inputs_med)
+anthromes <- anthrome_classify(hyde_med, inputs_med)
 ```
 
 The result is a stars object with the resulting anthromes
@@ -162,12 +163,12 @@ anthromes
 #> attribute(s):
 #>                          anthrome     
 #>  Inhabited drylands           :33235  
-#>  NODATA                       :27132  
 #>  Residential rainfed croplands: 6460  
 #>  Wild drylands                : 4204  
 #>  Populated woodlands          : 4093  
 #>  Populated croplands          : 3842  
 #>  (Other)                      : 8880  
+#>  NA's                         :27132  
 #> dimension(s):
 #>      from   to  offset      delta refsys point            values x/y
 #> x    2509 2629    -180  0.0833333 WGS 84 FALSE              NULL [x]
@@ -194,20 +195,28 @@ nicely formatted summaries of the percent land area in each anthrome.
 
 ``` r
 anthrome_summary(anthromes, inputs_med)
-#> # A tibble: 21 x 7
-#>    anthrome            `3000BC`  `2000BC`  `1000BC`      `0AD` `1000AD` `2000AD`
-#>    <fct>                    [%]       [%]       [%]        [%]      [%]      [%]
-#>  1 Urban              0.000000… 0.000000… 0.000000…  0.000000… 0.00000…  1.3435…
-#>  2 Mixed settlements  0.010362… 0.010362… 0.010362…  0.021014… 0.12557…  1.1911…
-#>  3 Rice villages      0.000000… 0.000000… 0.010689…  0.085413… 0.14963…  0.8229…
-#>  4 Irrigated villages 0.000000… 0.105933… 0.287752…  0.546544… 1.05498…  5.4193…
-#>  5 Rainfed villages   0.038284… 0.048964… 0.079556…  0.712320… 0.14186…  7.1569…
-#>  6 Pastoral villages  0.000000… 0.000000… 0.000000…  0.000000… 0.00000…  0.9703…
-#>  7 Residential irrig… 1.154401… 1.280373… 1.158554…  0.569328… 1.15223…  4.0399…
-#>  8 Residential rainf… 2.358643… 3.554338… 7.731140… 11.824162… 9.47797… 27.5704…
-#>  9 Populated croplan… 4.983536… 5.683022… 5.204140…  4.615843… 5.16068… 10.5713…
-#> 10 Remote croplands   0.521449… 1.466865… 2.471521…  3.037484… 3.70718…  2.0869…
-#> # … with 11 more rows
+#> # A tibble: 19 x 7
+#>    anthrome           `3000BC`  `2000BC`  `1000BC`     `0AD`  `1000AD`  `2000AD`
+#>    <fct>                   [%]       [%]       [%]       [%]       [%]       [%]
+#>  1 Urban              0.00000…  0.00000…  0.00000…  0.00000…  0.00000…  1.34354…
+#>  2 Mixed settlements  0.01036…  0.01036…  0.01036…  0.02101…  0.12557…  1.19113…
+#>  3 Rice villages      0.00000…  0.00000…  0.01068…  0.08541…  0.14963…  0.82291…
+#>  4 Irrigated villag…  0.00000…  0.10593…  0.28775…  0.54654…  1.05498…  5.41930…
+#>  5 Rainfed villages   0.03828…  0.04896…  0.07955…  0.71232…  0.14186…  7.15692…
+#>  6 Pastoral villages  0.00000…  0.00000…  0.00000…  0.00000…  0.00000…  0.97033…
+#>  7 Residential irri…  1.15440…  1.28037…  1.15855…  0.56932…  1.15223…  4.03996…
+#>  8 Residential rain…  2.35864…  3.55433…  7.73114… 11.82416…  9.47797… 27.57045…
+#>  9 Populated cropla…  4.98353…  5.68302…  5.20414…  4.61584…  5.16068… 10.57136…
+#> 10 Remote croplands   0.52144…  1.46686…  2.47152…  3.03748…  3.70718…  2.08692…
+#> 11 Residential rang…  0.00000…  0.07203…  0.05169…  1.08601…  0.38244…  2.43628…
+#> 12 Populated rangel…  0.00000…  0.06130…  0.18712…  5.52944…  3.61036…  4.00107…
+#> 13 Remote rangelands  0.23737…  0.28655…  1.82015…  1.32595…  2.42416…  3.98353…
+#> 14 Residential wood…  0.04704…  0.32915…  1.17174…  2.01134…  2.73228…  1.57193…
+#> 15 Populated woodla…  7.04758…  8.18503…  8.48347…  7.34081…  6.68319…  1.26049…
+#> 16 Remote woodlands   4.18605…  2.13041…  0.51071…  0.45298…  0.25802…  0.10423…
+#> 17 Inhabited drylan… 71.72798… 69.11729… 63.17898… 53.58786… 55.78579… 19.77959…
+#> 18 Wild woodlands     0.12060…  0.11407…  0.10529…  0.09494…  0.09072…  0.06987…
+#> 19 Wild drylands      7.56668…  7.55427…  7.53710…  7.15851…  7.06286…  5.62007…
 ```
 
 ### How to cite
