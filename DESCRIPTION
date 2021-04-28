@@ -22,7 +22,7 @@ Description: An R package for analyses of contemporary and historical land use
     and Anthromes-12k data (in both 5’ and Discrete Global Grid versions from 
     the Anthromes-12k-DGG repository at <https://doi.org/10.7910/DVN/E3H3AK>), 
     apply the anthromes classification routine, extract data to an equal-area 
-    DGG system,and generate common summary tables and visualizations.
+    DGG system, and generate common summary tables and visualizations.
 URL: https://github.com/nick-gauthier/anthromes
 BugReports: https://github.com/nick-gauthier/anthromes/issues
 License: MIT + file LICENSE
@@ -32,7 +32,6 @@ LazyData: true
 Roxygen: list(markdown = TRUE)
 RoxygenNote: 7.1.1
 Imports: 
-    dggridR,
     dplyr (>= 1.0.4),
     exactextractr (>= 0.5.1),
     stars,

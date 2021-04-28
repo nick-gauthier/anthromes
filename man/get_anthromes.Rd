@@ -23,7 +23,7 @@ Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
 to a stars object of population and land-use data.
 }
 \examples{
-get_anthromes(hyde_med, iputs_med)
+get_anthromes(hyde_med, inputs_med)
 
 }
 \references{
