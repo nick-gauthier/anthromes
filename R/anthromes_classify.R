@@ -1,6 +1,5 @@
 #' Anthromes classification
-#'
-#' Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
+#'Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
 #' to a stars object of population and land-use data.
 #'
 #' @param hyde a stars object containing HYDE 3.2 data to apply the anthromes
@@ -18,7 +17,6 @@
 #'
 #' @examples
 #' get_anthromes(hyde_med, inputs_med)
-#'
 get_anthromes <- function(hyde, inputs) {
   time_dims <- stars::st_get_dimension_values(hyde, 'time')# get the time values
 
@@ -70,7 +68,7 @@ anthromes_classify <- function(dat, inputs){
     pot_veg != 15 & trees == FALSE ~ 62L,
     pot_veg == 15 & used > 0 ~ 62L, # in python code but not paper
     pot_veg == 15 ~ 63L,
-    TRUE ~ 70L)
+    TRUE ~ NA_integer_)
   )
 }
 
