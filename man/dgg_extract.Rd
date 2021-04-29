@@ -9,7 +9,7 @@ dgg_extract(dat, dgg, var = NULL, fun)
 \arguments{
 \item{dat}{The raster data to extract.}
 
-\item{dgg}{Shapefile containing the DGG boundaries of to use for the extraction}
+\item{dgg}{Shapefile containing the DGG boundaries to use for the extraction.}
 
 \item{var}{The variable to extract.}
 

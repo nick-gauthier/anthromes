@@ -7,7 +7,7 @@
 #'derived from the 15-class potential natural vegetation dataset of
 #'Ramankutty, N. and Foley, J.A., 1999. Estimating historical changes in global
 #'land cover: Croplands from 1700 to 1992. Global biogeochemical cycles,
-#'13(4), pp.997-1027, along with a simplicification using only 9 classes.
+#'13(4), pp.997-1027, along with a simplification using only 9 classes.
 #' @return
 #' @export
 #'
@@ -159,57 +159,3 @@ region_key <-
   )
 
 region_lookup <- setNames(as.factor(region_key$region_name), region_key$region)
-
-
-#time_steps_ordered <- factor(time_steps, levels = time_steps, ordered = TRUE)
-#recent_time_steps <-  c("2012AD",  "2013AD",  "2014AD",  "2015AD",  "2016AD",  "2017AD")
-# time_key <- tibble::tibble(time_step = time_steps_ordered,
-#                            year = c(
-#                              seq(-10000,-1000, 1000),
-#                              1,
-#                              seq(100, 1700, 100),
-#                              seq(1710, 2000, 10),
-#                              seq(2001, 2017, 1)
-#                            ))
-# period_key <- dplyr::mutate(tibble::tibble(time_step = time_steps_ordered),
-#     millennia = time_step %in% time_steps_millennia(),
-#     centuries = time_step %in% time_steps_centuries(),
-#     decades = time_step %in% time_steps_decades()
-#   )
-
-#olson biomes
-# olson_key <- tibble::tibble(olson_biome = 1:14,
-#                             olson_name = factor(
-#                               c(
-#                                 'Tropical & Subtropical Moist Broadleaf Forests',
-#                                 'Tropical & Subtropical Dry Broadleaf Forests',
-#                                 'Tropical & Subtropical Coniferous Forests',
-#                                 'Temperate Broadleaf & Mixed Forests',
-#                                 'Temperate Conifer Forests',
-#                                 'Boreal Forests/Taiga',
-#                                 'Tropical & Subtropical Grasslands, Savannas & Shrublands',
-#                                 'Temperate Grasslands, Savannas & Shrublands',
-#                                 'Flooded Grasslands & Savannas',
-#                                 'Montane Grasslands & Shrublands',
-#                                 'Tundra',
-#                                 'Mediterranean Forests, Woodlands & Scrub',
-#                                 'Deserts & Xeric Shrublands',
-#                                 'Mangroves'
-#                               ),
-#                               levels = c(
-#                                 'Tropical & Subtropical Moist Broadleaf Forests',
-#                                 'Tropical & Subtropical Dry Broadleaf Forests',
-#                                 'Tropical & Subtropical Coniferous Forests',
-#                                 'Temperate Broadleaf & Mixed Forests',
-#                                 'Temperate Conifer Forests',
-#                                 'Boreal Forests/Taiga',
-#                                 'Tropical & Subtropical Grasslands, Savannas & Shrublands',
-#                                 'Temperate Grasslands, Savannas & Shrublands',
-#                                 'Flooded Grasslands & Savannas',
-#                                 'Montane Grasslands & Shrublands',
-#                                 'Tundra',
-#                                 'Mediterranean Forests, Woodlands & Scrub',
-#                                 'Deserts & Xeric Shrublands',
-#                                 'Mangroves'
-#                               )
-#                             ))

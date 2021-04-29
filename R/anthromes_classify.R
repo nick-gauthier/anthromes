@@ -23,22 +23,22 @@ anthrome_classify <- function(hyde, inputs) {
   seq_along(time_dims) %>% # iterate along the time steps
     # the problem here is that the slice and map approach repeats the geometry
     # vector a bunch of times ... slow!
-  purrr::map(~anthrome_casewhen(slice(hyde, 'time', .), inputs)) %>%
+  purrr::map(~anthrome_casewhen(dplyr::slice(hyde, 'time', .), inputs)) %>%
   do.call(c, .) %>%
   merge(name = 'time') %>%
   stars::st_set_dimensions('time', time_dims) %>%
   setNames('anthrome') %>%
-  mutate(anthrome = recode(anthrome, !!!anthrome_lookup))
+  dplyr::mutate(anthrome = dplyr::recode(anthrome, !!!anthrome_lookup))
 }
 
 anthrome_casewhen <- function(dat, inputs){
   # should check that all columns are present
   (dat / inputs['land_area']) %>% # area_weight
     c(inputs) %>%
-    mutate(used = crops + grazing + urban,
+    dplyr::mutate(used = crops + grazing + urban,
            trees = pot_veg %in% biome_key$biome15[1:8],
            ice = pot_veg == 'Polar Desert, Rock, and Ice') %>%
-  transmute(anthrome = case_when(
+  dplyr::transmute(anthrome = dplyr::case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,
     pop >= 100 & pot_vill == FALSE ~ 12L,
     pop >= 100 & rice >= 0.2 ~ 21L,
@@ -73,4 +73,5 @@ anthrome_casewhen <- function(dat, inputs){
   )
 }
 
-# note removed the area > 0 check for the last 4 classifiers because it was redundant, but it should be in there in case someone inputs a non land area!
+# note removed the area > 0 check for the last 4 classifiers because it was
+# redundant, but it should be in there in case someone inputs a non land area!

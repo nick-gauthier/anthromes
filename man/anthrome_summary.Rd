@@ -2,9 +2,12 @@
 % Please edit documentation in R/anthrome_summary.R
 \name{anthrome_summary}
 \alias{anthrome_summary}
+\alias{hyde_summary}
 \title{Calculate anthrome summaries}
 \usage{
 anthrome_summary(anthromes, inputs, by = NULL)
+
+hyde_summary(hyde, inputs, by = NULL)
 }
 \arguments{
 \item{anthromes}{A stars object containing the anthrome classification.}
@@ -23,6 +26,11 @@ A convenience function to create summaries of the total land area in each
 anthrome type at each time step, potentially subset by an additional
 variable.
 }
+\section{Functions}{
+\itemize{
+\item \code{hyde_summary}: Summarise HYDE 3.2 population time series.
+}}
+
 \examples{
 # global summary
 anthrome_summary(anthromes_med, inputs_med)

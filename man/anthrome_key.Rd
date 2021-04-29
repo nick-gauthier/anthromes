@@ -21,7 +21,7 @@ and other data, as well as color ramps for easy plotting. The biome data are
 derived from the 15-class potential natural vegetation dataset of
 Ramankutty, N. and Foley, J.A., 1999. Estimating historical changes in global
 land cover: Croplands from 1700 to 1992. Global biogeochemical cycles,
-13(4), pp.997-1027, along with a simplicification using only 9 classes.
+13(4), pp.997-1027, along with a simplification using only 9 classes.
 }
 \examples{
 time_steps_millennia
