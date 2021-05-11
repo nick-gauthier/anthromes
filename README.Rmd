@@ -28,31 +28,43 @@ It is based on (and supersedes) the R research compendium used to generate the a
 > Ellis, E.C., N. Gauthier, K. Klein Goldewijk, R. Bliege Bird, N. Boivin, S. Diaz, D. Fuller, J. Gill, J. Kaplan, N. Kingston, H. Locke, C. McMichael, D. Ranco, T. Rick, M.R. Shaw, L. Stephens, J.C. Svenning, J.E.M. Watson, (2021). *People have shaped most of terrestrial nature for at least 12,000 years*. PNAS.
 > <https://doi.org/10.1073/pnas.2023483118>
 
+Read below for a quick setup guide or check out the [package vignette](vignettes/anthromes-intro.html) for more details and example workflows.
 
 ## Installation
 
 You can install the development version from [GitHub](https://github.com/) with:
 
 ``` r
-# install.packages("devtools")
-devtools::install_github("nick-gauthier/anthromes")
+# install.packages("remotes")
+remotes::install_github("nick-gauthier/anthromes")
 ```
+
 ## Example
 
 
-```{r example}
+```{r example, message=FALSE}
 library(anthromes)
 library(stars)
+library(dplyr)
 library(ggplot2)
 ```
 
-Read in the anthromes data as a stars object. stars in an R package for working with space-time cubes like the HYDE 3.2 data, which are spatial rasters representing multiple time steps. A stars object prints two pieces of information, the attribute data (which is essentially a tibble that can be manipulated via typical tidyverse functions) and dimension information (which records the spatial and temporal dimensions of the object).
+Read in the `anthromes` data as a stars object. `stars` is an R package for working with space-time cubes like the HYDE 3.2 data, which are spatial rasters representing multiple time steps. A stars object prints two pieces of information, the attribute data (which is essentially a tibble that can be manipulated via typical `tidyverse` functions) and dimension information (which records the spatial and temporal dimensions of the object).
 
 ```{r}
 hyde_med
 ```
+You can manipulate these data using standard `dplyr` functions. For example, you can use `filter` and `mutate` to calculate the total used land area (cropland, grazing land, and urban areas) in the year 2000 AD and print a summary.
+```{r}
+hyde_med %>%
+  filter(time == '2000AD') %>%
+  transmute(used = crops + grazing + urban) %>%
+  pull(used) %>%
+  summary()
+```
 
-You can easily plot these objects in ggplot using geom_stars().
+
+You can easily plot these objects in ggplot using `geom_stars()`.
 
 ```{r sample_plot, warning = FALSE}
 ggplot() +
@@ -63,7 +75,7 @@ ggplot() +
   coord_quickmap() +
   theme_bw()
 ```
-By default, geom_stars will only plot the first attribute. If you'd like to plot multiple attributes at a time, the easiest way is to convert the attributes to an extra dimension.
+By default, `geom_stars()` will only plot the first attribute. If you'd like to plot multiple attributes at a time, the easiest way is to convert the attributes to an extra dimension using `stars::merge()`.
 ```{r attributes, warning = FALSE}
 ggplot() +
   geom_stars(data = merge(hyde_med[c(1:2,5),,,])) +
@@ -74,13 +86,15 @@ ggplot() +
   theme_bw()
 ```
 
-You can easily animate these data using gganimate. 
+You can easily animate these data using `gganimate`. 
 ```{r animation, warning=FALSE, nframes = 50}
+library(gganimate)
+
 ggplot() +
   geom_stars(data = hyde_med) +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
   # use transition_states() from gganimate instead of facet_wrap to animate
-  gganimate::transition_states(time, transition_length = 0.5) +
+  transition_states(time, transition_length = 0.5) +
   labs(title = 'HYDE 3.2 land use', 
        subtitle = 'Cropland at {closest_state}', 
        x = 'Latitude', y = 'Longitude') +
@@ -88,10 +102,12 @@ ggplot() +
   theme_bw()
 ```
 
+Please refer to the excellent `stars` documentation at <https://r-spatial.github.io/stars/> for more information about working with spatio-temporal arrays in R.
 
 ## Anthromes classification
 
-The main function of the package is anthrome_classify(), which applies the anthromes v2.1 classification algorithm originally presented in 
+The main function of the package is `anthrome_classify()`, which applies the anthromes v2.1 classification algorithm originally presented in :
+
 > Ellis, E.C., A.H.W. Beusen, K. Klein Goldewijk, (202). *Anthropogenic Biomes: 10,000 BCE to 2015 CE*. Land, 9 (5).
 > <https://doi.org/10.3390/LAND9050129>
 
@@ -99,7 +115,7 @@ And later modified in *Ellis et al. 2021* above.
 
 !['Anthromes classification flowchart (v2.1) from *Ellis et al. 2020*.'](vignettes/anthromes_flowchart.png)
 
-anthrome_classify() requires the HYDE 3.2 data in a spatio-temporal array, along with a 2-dimensional array of fixed input variables such as land area and potential natural vegetation.
+`anthrome_classify()` requires the HYDE 3.2 data in a spatio-temporal array, along with a 2-dimensional array of fixed input variables such as land area and potential natural vegetation.
 ```{r}
 anthromes <- anthrome_classify(hyde_med, inputs_med)
 ```
@@ -109,7 +125,7 @@ The result is a stars object with the resulting anthromes classification, with t
 ```{r}
 anthromes
 ```
-As above, these data can be easily plotted in ggplot using geom_stars. The default anthromes color scheme is provided in the function anthrome_colors() for convenience.
+As above, these data can be easily plotted in ggplot using geom_stars. The default anthromes color scheme is provided in the function `anthrome_colors()` for convenience.
 
 ```{r anthromes, warning = FALSE}
 ggplot() +
@@ -120,7 +136,7 @@ ggplot() +
   theme_bw() +
   labs(title = 'Anthromes-12k', x = 'Latitude', y = 'Longitude')
 ```
-Create nicely formatted summaries of the percent land area in each anthrome.
+Create nicely formatted summaries of the percent land area in each anthrome using `anthrome_summary()`.
 ```{r}
 anthrome_summary(anthromes, inputs_med)
 ```

@@ -30,14 +30,18 @@ generate the analyses and figures for:
 > terrestrial nature for at least 12,000 years*. PNAS.
 > <https://doi.org/10.1073/pnas.2023483118>
 
+Read below for a quick setup guide or check out the [package
+vignette](vignettes/anthromes-intro.html) for more details and example
+workflows.
+
 ## Installation
 
 You can install the development version from
 [GitHub](https://github.com/) with:
 
 ``` r
-# install.packages("devtools")
-devtools::install_github("nick-gauthier/anthromes")
+# install.packages("remotes")
+remotes::install_github("nick-gauthier/anthromes")
 ```
 
 ## Example
@@ -45,40 +49,36 @@ devtools::install_github("nick-gauthier/anthromes")
 ``` r
 library(anthromes)
 library(stars)
-#> Loading required package: abind
-#> Loading required package: sf
-#> Linking to GEOS 3.8.1, GDAL 3.1.4, PROJ 6.3.1
+library(dplyr)
 library(ggplot2)
 ```
 
-Read in the anthromes data as a stars object. stars in an R package for
-working with space-time cubes like the HYDE 3.2 data, which are spatial
-rasters representing multiple time steps. A stars object prints two
-pieces of information, the attribute data (which is essentially a tibble
-that can be manipulated via typical tidyverse functions) and dimension
-information (which records the spatial and temporal dimensions of the
-object).
+Read in the `anthromes` data as a stars object. `stars` is an R package
+for working with space-time cubes like the HYDE 3.2 data, which are
+spatial rasters representing multiple time steps. A stars object prints
+two pieces of information, the attribute data (which is essentially a
+tibble that can be manipulated via typical `tidyverse` functions) and
+dimension information (which records the spatial and temporal dimensions
+of the object).
 
 ``` r
 hyde_med
 #> stars object with 3 dimensions and 6 attributes
 #> attribute(s):
-#>      crops           grazing           rice              pop           
-#>  Min.   : 0.000   Min.   : 0.000   Min.   : 0.000   Min.   :      0.0  
-#>  1st Qu.: 0.000   1st Qu.: 0.068   1st Qu.: 0.000   1st Qu.:     65.2  
-#>  Median : 1.399   Median : 0.942   Median : 0.000   Median :    222.5  
-#>  Mean   : 8.579   Mean   : 4.007   Mean   : 0.106   Mean   :   2060.5  
-#>  3rd Qu.:10.349   3rd Qu.: 3.382   3rd Qu.: 0.000   3rd Qu.:    620.8  
-#>  Max.   :74.328   Max.   :74.077   Max.   :73.823   Max.   :1802804.1  
-#>  NA's   :27132    NA's   :27132    NA's   :27132    NA's   :27132      
-#>   irrigation          urban       
-#>  Min.   : 0.000   Min.   : 0.000  
-#>  1st Qu.: 0.000   1st Qu.: 0.000  
-#>  Median : 0.000   Median : 0.000  
-#>  Mean   : 1.372   Mean   : 0.114  
-#>  3rd Qu.: 0.000   3rd Qu.: 0.000  
-#>  Max.   :74.203   Max.   :74.328  
-#>  NA's   :27132    NA's   :27132   
+#>             Min.      1st Qu.      Median         Mean    3rd Qu.         Max.
+#> crops          0  0.000179287   1.3989784    8.5791286  10.348840      74.3285
+#> grazing        0  0.068011791   0.9421589    4.0070415   3.382091      74.0772
+#> rice           0  0.000000000   0.0000000    0.1056585   0.000000      73.8234
+#> pop            0 65.238454819 222.5272064 2060.4865140 620.780472 1802804.1250
+#> irrigation     0  0.000000000   0.0000000    1.3722187   0.000000      74.2032
+#> urban          0  0.000000000   0.0000000    0.1139881   0.000000      74.3285
+#>              NA's
+#> crops       27132
+#> grazing     27132
+#> rice        27132
+#> pop         27132
+#> irrigation  27132
+#> urban       27132
 #> dimension(s):
 #>      from   to  offset      delta refsys point            values x/y
 #> x    2509 2629    -180  0.0833333 WGS 84 FALSE              NULL [x]
@@ -86,7 +86,22 @@ hyde_med
 #> time    1    6      NA         NA     NA    NA 3000BC,...,2000AD
 ```
 
-You can easily plot these objects in ggplot using geom\_stars().
+You can manipulate these data using standard `dplyr` functions. For
+example, you can use `filter` and `mutate` to calculate the total used
+land area (cropland, grazing land, and urban areas) in the year 2000 AD
+and print a summary.
+
+``` r
+hyde_med %>%
+  filter(time == '2000AD') %>%
+  transmute(used = crops + grazing + urban) %>%
+  pull(used) %>%
+  summary()
+#>    Min. 1st Qu.  Median    Mean 3rd Qu.    Max.    NA's 
+#>   0.000   8.146  35.993  32.978  55.061  74.328    4522
+```
+
+You can easily plot these objects in ggplot using `geom_stars()`.
 
 ``` r
 ggplot() +
@@ -99,9 +114,9 @@ ggplot() +
 ```
 
 <img src="man/figures/README-sample_plot-1.png" width="100%" /> By
-default, geom\_stars will only plot the first attribute. If you’d like
-to plot multiple attributes at a time, the easiest way is to convert the
-attributes to an extra dimension.
+default, `geom_stars()` will only plot the first attribute. If you’d
+like to plot multiple attributes at a time, the easiest way is to
+convert the attributes to an extra dimension using `stars::merge()`.
 
 ``` r
 ggplot() +
@@ -115,14 +130,16 @@ ggplot() +
 
 <img src="man/figures/README-attributes-1.png" width="100%" />
 
-You can easily animate these data using gganimate.
+You can easily animate these data using `gganimate`.
 
 ``` r
+library(gganimate)
+
 ggplot() +
   geom_stars(data = hyde_med) +
   scale_fill_viridis_c(na.value = NA, name = expression(km^2)) +
   # use transition_states() from gganimate instead of facet_wrap to animate
-  gganimate::transition_states(time, transition_length = 0.5) +
+  transition_states(time, transition_length = 0.5) +
   labs(title = 'HYDE 3.2 land use', 
        subtitle = 'Cropland at {closest_state}', 
        x = 'Latitude', y = 'Longitude') +
@@ -132,20 +149,25 @@ ggplot() +
 
 <img src="man/figures/README-animation-1.gif" width="100%" />
 
+Please refer to the excellent `stars` documentation at
+<https://r-spatial.github.io/stars/> for more information about working
+with spatio-temporal arrays in R.
+
 ## Anthromes classification
 
-The main function of the package is anthrome\_classify(), which applies
-the anthromes v2.1 classification algorithm originally presented in &gt;
-Ellis, E.C., A.H.W. Beusen, K. Klein Goldewijk, (202). *Anthropogenic
-Biomes: 10,000 BCE to 2015 CE*. Land, 9 (5). &gt;
-<https://doi.org/10.3390/LAND9050129>
+The main function of the package is `anthrome_classify()`, which applies
+the anthromes v2.1 classification algorithm originally presented in :
+
+> Ellis, E.C., A.H.W. Beusen, K. Klein Goldewijk, (202). *Anthropogenic
+> Biomes: 10,000 BCE to 2015 CE*. Land, 9 (5).
+> <https://doi.org/10.3390/LAND9050129>
 
 And later modified in *Ellis et al. 2021* above.
 
 ![‘Anthromes classification flowchart (v2.1) from *Ellis et
 al. 2020*.’](vignettes/anthromes_flowchart.png)
 
-anthrome\_classify() requires the HYDE 3.2 data in a spatio-temporal
+`anthrome_classify()` requires the HYDE 3.2 data in a spatio-temporal
 array, along with a 2-dimensional array of fixed input variables such as
 land area and potential natural vegetation.
 
@@ -178,7 +200,7 @@ anthromes
 
 As above, these data can be easily plotted in ggplot using geom\_stars.
 The default anthromes color scheme is provided in the function
-anthrome\_colors() for convenience.
+`anthrome_colors()` for convenience.
 
 ``` r
 ggplot() +
@@ -191,7 +213,8 @@ ggplot() +
 ```
 
 <img src="man/figures/README-anthromes-1.png" width="100%" /> Create
-nicely formatted summaries of the percent land area in each anthrome.
+nicely formatted summaries of the percent land area in each anthrome
+using `anthrome_summary()`.
 
 ``` r
 anthrome_summary(anthromes, inputs_med)

@@ -59,7 +59,7 @@ Also load in the HYDE 3.2 supporting grids: land area, potential vegetation, and
 inputs_med
 ```
 
-You can easily plot these objects in ggplot using geom_stars().
+You can easily plot these objects in ggplot using `geom_stars()`.
 
 ```{r}
 ggplot() +
@@ -112,10 +112,6 @@ ggplot() +
   labs(title = 'Anthromes-12k', x = 'Latitude', y = 'Longitude')
 ```
 
-```{r}
-knitr::knit_exit()
-```
-
 # Discrete Global Grids
 
 Rasters are great, but a hexagonal discrete global grid system would keep the cell areas the same and better represent shapes over the Earth's surface.
@@ -127,10 +123,10 @@ ggplot(dgg_med) +
 ```
 
 
-Use the get_dgg function to extract the HYDE 3.2 data using the DGG hexagons. It uses exact_extractr under the hood, which prints a progress bar by default.
+Use the `dgg_extract()` function to extract the HYDE 3.2 data using the DGG hexagons. It uses `exactextractr` under the hood, which prints a progress bar by default.
 
 ```{r}
-crops <-  dgg_extract(hyde_med, dgg_med, 'crops')
+crops <-  dgg_extract(hyde_med, dgg_med, 'crops', fun = 'sum')
 ```
 
 ```{r}
@@ -163,7 +159,7 @@ a + b
 Map this function over the list of HYDE variable names.
 ```{r}
 hyde_dgg <- names(hyde_med) %>%
-  map(~dgg_extract(hyde_med, dgg_med, var = ., fun = 'sum')) %>%
+  purrr::map(~dgg_extract(hyde_med, dgg_med, var = ., fun = 'sum')) %>%
   do.call(c, .)
 ```
 ```{r fig.width= 5, fig.height=3}
@@ -217,12 +213,12 @@ ggplot() +
 
 
 ## Summary statistics
- Use the anthrome_summary() function to produce formatted summary tables of the percent land area of under each anthrome type for each time period.
+ Use the `anthrome_summary()` function to produce formatted summary tables of the percent land area of under each anthrome type for each time period.
  
 ```{r}
 anthrome_summary(anthromes_dgg, inputs_dgg)
 ```
-anthrome_summary() also has a "by" argument, which adds an additional grouping factor. The resulting summaries are now in percent of land area under each anthrome in each time period in each of the grouping variables.
+`anthrome_summary()` also has a "by" argument, which adds an additional grouping factor. The resulting summaries are now in percent of land area under each anthrome in each time period in each of the grouping variables.
 ```{r}
 anthrome_summary(anthromes_dgg, 
                  mutate(inputs_dgg, pot_veg = as.factor(pot_veg)), 
@@ -234,15 +230,16 @@ anthrome_summary(anthromes_dgg,
                  by = iso)
 ```
 
-You can also use the get_hyde_pop() function to extract population estimates from HYDE.
+You can also use the `hyde_summary()` function to extract population estimates from HYDE.
 ```{r}
-get_hyde_pop(hyde_dgg, inputs_dgg) %>%
+hyde_summary(hyde_dgg, inputs_dgg) %>%
   ggplot(aes(time, pop, group = 1)) +
   geom_point() +
-  stat_summary(fun.y=sum, geom="line")
+  stat_summary(fun.y=sum, geom="line") +
+  theme_bw()
 ```
-```{r}
-get_hyde_pop(hyde_dgg, inputs_dgg, by = iso) %>%
+```{r, include=FALSE}
+hyde_summary(hyde_dgg, inputs_dgg, by = iso) %>%
   ggplot(aes(time, pop, group = iso)) +
   geom_point() +
   stat_summary(fun.y=sum, geom="line", aes(color = as.factor(iso))) +
@@ -251,7 +248,7 @@ get_hyde_pop(hyde_dgg, inputs_dgg, by = iso) %>%
 
 ## Statistical modeling
 
-As stars objects, its easy to do statistical analyses on the data.
+As `stars` objects, the data can be easily coerced to a `tibble` for statistical analysis.
 ```{r}
 pc <- hyde_dgg %>%
   as_tibble() %>%
@@ -260,13 +257,16 @@ pc <- hyde_dgg %>%
 
 pc
 ```
-
+```{r}
+knitr::knit_exit()
+```
 
 # Global analyses 
 
 ```{r}
 get_hyde('inputs', dir = '..') %>% merge %>% plot
 ```
+
 ```{r}
 hyde <- get_hyde(dir = '..') %>%
   st_crop(bbox) %>%
@@ -286,9 +286,6 @@ inputs <- get_hyde('inputs', dir = '..') %>%
 
 
 # the rest
-```{r}
-knitr::knit_exit()
-```
 
 why does exact_extractr error here?
 ```{r, eval = FALSE}
