@@ -30,8 +30,7 @@ generate the analyses and figures for:
 > terrestrial nature for at least 12,000 years*. PNAS.
 > <https://doi.org/10.1073/pnas.2023483118>
 
-Read below for a quick setup guide or check out the [package
-vignette](vignettes/anthromes-intro.html) for more details and example
+Read below for a quick setup guide or check out the [vignette](https://nick-gauthier.github.io/anthromes/articles/anthromes-intro.html) on the [package website](https://nick-gauthier.github.io/anthromes) for more details, documentation, and example
 workflows.
 
 ## Installation
