@@ -94,7 +94,7 @@ ggplot() +
   labs(title = 'HYDE 3.2 land use', x = 'Latitude', y = 'Longitude')
 ```
 
-# Apply anthromes classification
+# Anthromes classification
 
 ```{r}
 anthromes <- anthrome_classify(hyde_med, inputs_med)
@@ -212,7 +212,7 @@ ggplot() +
 ```
 
 
-## Summary statistics
+# Summary statistics
  Use the `anthrome_summary()` function to produce formatted summary tables of the percent land area of under each anthrome type for each time period.
  
 ```{r}
@@ -246,7 +246,7 @@ hyde_summary(hyde_dgg, inputs_dgg, by = iso) %>%
   theme_bw()
 ```
 
-## Statistical modeling
+# Statistical modeling
 
 As `stars` objects, the data can be easily coerced to a `tibble` for statistical analysis.
 ```{r}

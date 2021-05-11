@@ -2,9 +2,7 @@
 % Please edit documentation in R/anthromes_classify.R
 \name{anthrome_classify}
 \alias{anthrome_classify}
-\title{Anthromes classification
-Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
-to a stars object of population and land-use data.}
+\title{Anthromes classification}
 \usage{
 anthrome_classify(hyde, inputs)
 }
@@ -21,7 +19,6 @@ a stars object containing the resulting anthrome classes with the
 same dimensions as hyde.
 }
 \description{
-Anthromes classification
 Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
 to a stars object of population and land-use data.
 }

@@ -1,4 +1,5 @@
 #' Anthromes classification
+#'
 #'Applies the Anthromes-12k classification algorithm from Ellis et al. 2020
 #' to a stars object of population and land-use data.
 #'
