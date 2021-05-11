@@ -4,7 +4,7 @@
 \alias{dgg_extract}
 \title{Extract raster data with a DGG shapefile}
 \usage{
-dgg_extract(dat, dgg, var = NULL, fun)
+dgg_extract(dat, dgg, var = NULL, fun, progress = FALSE)
 }
 \arguments{
 \item{dat}{The raster data to extract.}

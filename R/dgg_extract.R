@@ -13,15 +13,15 @@
 #' @export
 #'
 #' @examples dgg_extract(hyde_med, dgg_med, 'crops', 'sum')
-dgg_extract <- function(dat, dgg, var = NULL, fun) {
+dgg_extract <- function(dat, dgg, var = NULL, fun, progress = FALSE) {
   if(is.null(var)) {
-    exactextractr::exact_extract(as(dat, 'Raster'), dgg, fun) %>%
+    exactextractr::exact_extract(as(dat, 'Raster'), dgg, fun, progress = progress) %>%
 #      rename_with(str_remove, pattern = paste0(fun, '.')) %>%
       dplyr::mutate(geometry = dgg$geom) %>%
       sf::st_as_sf() %>%
       stars::st_as_stars()
   } else {
-    exactextractr::exact_extract(as(dat[var], 'Raster'), dgg, fun) %>%
+    exactextractr::exact_extract(as(dat[var], 'Raster'), dgg, fun, progress = progress) %>%
       dplyr::mutate(geometry = dgg$geom) %>%
       sf::st_as_sf() %>%
       stars::st_as_stars() %>%
