@@ -247,9 +247,9 @@
 <span class="co">#&gt; Warning: Removed 81396 rows containing missing values (geom_raster).</span></code></pre></div>
 <p><img src="anthromes-intro_files/figure-html/unnamed-chunk-9-1.png" width="480"></p>
 </div>
-<div id="apply-anthromes-classification" class="section level1">
+<div id="anthromes-classification" class="section level1">
 <h1 class="hasAnchor">
-<a href="#apply-anthromes-classification" class="anchor"></a>Apply anthromes classification</h1>
+<a href="#anthromes-classification" class="anchor"></a>Anthromes classification</h1>
 <div class="sourceCode" id="cb10"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="va">anthromes</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/anthrome_classify.html">anthrome_classify</a></span><span class="op">(</span><span class="va">hyde_med</span>, <span class="va">inputs_med</span><span class="op">)</span></code></pre></div>
 <p><img src="anthromes_flowchart.png"></p>
@@ -348,9 +348,10 @@
   <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/ggtheme.html">theme_bw</a></span><span class="op">(</span><span class="op">)</span> <span class="op">+</span>
   <span class="fu"><a href="https://ggplot2.tidyverse.org/reference/labs.html">labs</a></span><span class="op">(</span>title <span class="op">=</span> <span class="st">'Anthromes-12k DGG'</span>, x <span class="op">=</span> <span class="st">'Latitude'</span>, y <span class="op">=</span> <span class="st">'Longitude'</span><span class="op">)</span></code></pre></div>
 <p><img src="anthromes-intro_files/figure-html/unnamed-chunk-21-2.png" width="700"></p>
-<div id="summary-statistics" class="section level2">
-<h2 class="hasAnchor">
-<a href="#summary-statistics" class="anchor"></a>Summary statistics</h2>
+</div>
+<div id="summary-statistics" class="section level1">
+<h1 class="hasAnchor">
+<a href="#summary-statistics" class="anchor"></a>Summary statistics</h1>
 <p>Use the <code><a href="../reference/anthrome_summary.html">anthrome_summary()</a></code> function to produce formatted summary tables of the percent land area of under each anthrome type for each time period.</p>
 <div class="sourceCode" id="cb22"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu"><a href="../reference/anthrome_summary.html">anthrome_summary</a></span><span class="op">(</span><span class="va">anthromes_dgg</span>, <span class="va">inputs_dgg</span><span class="op">)</span>
@@ -419,9 +420,9 @@
 <span class="co">#&gt; Warning: `fun.y` is deprecated. Use `fun` instead.</span></code></pre></div>
 <p><img src="anthromes-intro_files/figure-html/unnamed-chunk-25-1.png" width="700"></p>
 </div>
-<div id="statistical-modeling" class="section level2">
-<h2 class="hasAnchor">
-<a href="#statistical-modeling" class="anchor"></a>Statistical modeling</h2>
+<div id="statistical-modeling" class="section level1">
+<h1 class="hasAnchor">
+<a href="#statistical-modeling" class="anchor"></a>Statistical modeling</h1>
 <p>As <code>stars</code> objects, the data can be easily coerced to a <code>tibble</code> for statistical analysis.</p>
 <div class="sourceCode" id="cb26"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="va">pc</span> <span class="op">&lt;-</span> <span class="va">hyde_dgg</span> <span class="op">%&gt;%</span>
@@ -450,7 +451,6 @@
 <span class="co">#&gt; urban      -0.681795256</span></code></pre></div>
 <div class="sourceCode" id="cb27"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/knit_exit.html">knit_exit</a></span><span class="op">(</span><span class="op">)</span></code></pre></div>
-</div>
 </div>
   </div>
 
