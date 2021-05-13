@@ -2,12 +2,15 @@
 % Please edit documentation in R/hyde_read.R
 \name{hyde_read}
 \alias{hyde_read}
+\alias{hyde_download}
 \title{Get HYDE 3.2 population and land use data}
 \usage{
 hyde_read(
   vars = c("cropland", "grazing", "ir_rice", "popc", "tot_irri", "uopp"),
   dir = "."
 )
+
+hyde_download(dir = ".")
 }
 \arguments{
 \item{vars}{The HYDE 3.2 variables to import. Either any combination of
@@ -26,6 +29,11 @@ all 75 time steps. If vars = 'input', a 2-dimensional stars object.
 \description{
 Get HYDE 3.2 population and land use data
 }
+\section{Functions}{
+\itemize{
+\item \code{hyde_download}: Download raw HYDE 3.2 data
+}}
+
 \examples{
 \dontrun{
 hyde_download() # downloads HYDE 3.2 rawdata from Harvard Dataverse

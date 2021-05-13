@@ -49,8 +49,9 @@ hyde_read <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc',
   }
 }
 
+#' @describeIn hyde_read Download raw HYDE 3.2 data
 #' @export
-hyde_download <- function(dir = .) {
+hyde_download <- function(dir = '.') {
   hyde_dir <- file.path(dir, 'raw-data.zip')
 
   if(!file.exists(hyde_dir)){
