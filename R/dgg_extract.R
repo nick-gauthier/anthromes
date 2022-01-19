@@ -15,7 +15,7 @@
 #' @examples dgg_extract(hyde_med, dgg_med, 'crops', 'sum')
 dgg_extract <- function(dat, dgg, var = NULL, fun, progress = FALSE) {
   if(is.null(var)) {
-    exactextractr::exact_extract(as(dat, 'Raster'), dgg, fun, progress = progress) %>%
+    exactextractr::exact_extract(as(dat, 'Raster'), dgg, fun, progress = progress, force_df = TRUE) %>%
 #      rename_with(str_remove, pattern = paste0(fun, '.')) %>%
       dplyr::mutate(geometry = dgg$geom) %>%
       sf::st_as_sf() %>%
