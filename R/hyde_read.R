@@ -45,7 +45,8 @@ hyde_read <- function(vars = c('cropland', 'grazing', 'ir_rice', 'popc',
            vars, '.tif') %>%
       stars::read_stars() %>%
       stars::st_set_dimensions('band', names = 'time') %>%
-      setNames(., gsub('.tif', '', names(.)))
+      setNames(c('crops', 'grazing', 'rice', 'pop', 'irrigation', 'urban')) # hardcoded, should be more flexible!
+      #setNames(., gsub('.tif', '', names(.)))
   }
 }
 
