@@ -8,6 +8,7 @@
 #' @param dgg Shapefile containing the DGG boundaries to use for the extraction.
 #' @param var The variable to extract.
 #' @param fun The function to pass to exactextractr::exact_extract().
+#' @param progress Display the exactextractr::exact_extract() progress bar.
 #'
 #' @return
 #' @export
