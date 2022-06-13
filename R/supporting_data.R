@@ -68,10 +68,15 @@ anthrome_key <- tibble::tibble(
     levels = c('Intensive', 'Cultured', 'Wild', 'NODATA')
   )
 )
-
+#' @export
 anthrome_lookup <- anthrome_key %>%
   dplyr::pull(class) %>%
   setNames(anthrome_key$anthrome)
+
+#' @export
+anthrome_class_to_type <- anthrome_key %>%
+  dplyr::pull(type) %>%
+  setNames(anthrome_key$class)
 
 # Time steps
 
@@ -95,6 +100,7 @@ time_steps <- c(time_steps_millennia[1:10],
                 time_steps_years)
 
 # Biomes
+#' @export
 biome_key <- dplyr::mutate(tibble::tibble(biome_value = 1:15),
     biome = dplyr::case_when(
       biome_value %in% c(1, 2) ~ 'Tropical woodland',
@@ -138,6 +144,7 @@ biome_key <- dplyr::mutate(tibble::tibble(biome_value = 1:15),
     )
   )
 
+#' @export
 biome_lookup <- biome_key %>%
   dplyr::pull(biome15) %>%
   setNames(biome_key$biome_value)
