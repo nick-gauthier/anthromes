@@ -10,9 +10,6 @@ An object of class \code{tbl_df} (inherits from \code{tbl}, \code{data.frame}) w
 \usage{
 anthrome_key
 }
-\value{
-
-}
 \description{
 These are several convenience datasets that make it easier to plot and
 analyze the anthromes data. They primarily include lookup tables to easily

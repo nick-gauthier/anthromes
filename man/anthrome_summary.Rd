@@ -18,9 +18,6 @@ hyde_summary(hyde, inputs, by = NULL)
 
 \item{hyde}{A stars object containing HYDE 3.2 land use and population data.}
 }
-\value{
-
-}
 \description{
 A convenience function to create summaries of the total land area in each
 anthrome type at each time step, potentially subset by an additional

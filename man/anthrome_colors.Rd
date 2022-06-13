@@ -11,9 +11,6 @@ anthrome_colors(kind = "class")
 or "type". Defaults to "class" the color palette for the full 21 anthrome
 classes.}
 }
-\value{
-
-}
 \description{
 Convenience functions for returning color tables for anthrome classes,
 levels, and types

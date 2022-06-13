@@ -14,9 +14,8 @@ dgg_extract(dat, dgg, var = NULL, fun, progress = FALSE)
 \item{var}{The variable to extract.}
 
 \item{fun}{The function to pass to exactextractr::exact_extract().}
-}
-\value{
 
+\item{progress}{Display the exactextractr::exact_extract() progress bar.}
 }
 \description{
 Given a stars data object and shapefile, extracts the relevant data using
