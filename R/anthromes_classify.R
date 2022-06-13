@@ -29,15 +29,15 @@ anthrome_classify <- function(hyde, inputs) {
   merge(name = 'time') %>%
   stars::st_set_dimensions('time', time_dims) %>%
   setNames('anthrome') %>%
-  dplyr::mutate(anthrome = dplyr::recode(anthrome, !!!anthrome_lookup))
+  dplyr::mutate(anthrome = dplyr::recode(anthrome, !!!anthrome_lookup)) # making this a factor variable would cut down on object size
 }
 
 anthrome_casewhen <- function(dat, inputs){
-  # should check that all columns are present
+  # should check that all columns are present and that pot_veg is correct character?
   (dat / inputs['land_area']) %>% # area_weight
     c(inputs) %>%
     dplyr::mutate(used = crops + grazing + urban,
-           trees = pot_veg %in% biome_key$biome15[1:8],
+           trees = pot_veg %in% biome_key$biome15[1:8], # this fails silently if pot_veg isn't right
            ice = pot_veg == 'Polar Desert, Rock, and Ice') %>%
   dplyr::transmute(anthrome = dplyr::case_when(
     urban >= 0.2 | pop >= 2500 ~ 11L,
